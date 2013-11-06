@@ -1,148 +1,9 @@
 #!/usr/bin/env perl
 
-use Moose;
 use MooseX::Declare;
-use 5.10.0;
-
-# Store the log_path
-our $log_path;
-our $logfile_path;
-
-sub logfile {
-    return $logfile_path;
-}
-
-# Log Role
-role MyApp::Log {
-    use Log::Log4perl qw(:easy);
-    with 'MooseX::Log::Log4perl::Easy';
- 
-    use Cwd 'abs_path';
-    use File::Basename;
-    use File::Path;
-
-    # Configuring log 
-    BEGIN {
-        my $logconf_file    = 'log4perl.conf';
-        my $log_conf_path   = '';
-        my $full_path       = abs_path($0);
-        my $script_path     = dirname($full_path);
-        my $current_path    = &Cwd::cwd();
-        my $script_filename = basename($full_path);
-        my $script_name     = $script_filename;
-
-        # Removing extension
-        $script_name =~ s/\.\S+$//;
-        
-        $log_path = &Cwd::cwd().'/logs/';
-        unless (-e $log_path){
-            mkpath($log_path);
-        }
-        $logfile_path = $log_path . $script_name . '.log';
-        my $logtracefile_path = $log_path . $script_name . '_trace.log';
-
-
-        # Verifify conf path
-        if ( -d $current_path . '/conf' ) {
-            $log_conf_path = $current_path.'/conf/';
-        }
-        elsif ( -d $current_path . '/../conf' ) {
-            $log_conf_path = $current_path. '/../conf/';
-        }
-
-        # Name of the custom file: "script_name"_log4perl.conf
-        my $personal_logconf_file = $script_name . '_log4perl.conf';
-
-        if ( -e $current_path . $personal_logconf_file ) {
-            $logconf_file = $personal_logconf_file;
-        }
-
-        $log_conf_path .= $logconf_file
-          if ( -e $log_conf_path . $logconf_file );
-       
-        if ($log_conf_path){
-            Log::Log4perl->init($log_conf_path);
-        }
-        else {
-            Log::Log4perl->init(
-                \qq{
-
-                log4perl.rootLogger = TRACE, LOGFILE, Screen, AppTrace
-
-                # Filter to match level ERROR
-                log4perl.filter.MatchError = Log::Log4perl::Filter::LevelMatch
-                log4perl.filter.MatchError.LevelToMatch  = ERROR
-                log4perl.filter.MatchError.AcceptOnMatch = true
- 
-                # Filter to match level DEBUG
-                log4perl.filter.MatchDebug = Log::Log4perl::Filter::LevelMatch
-                log4perl.filter.MatchDebug.LevelToMatch  = DEBUG
-                log4perl.filter.MatchDebug.AcceptOnMatch = true
- 
-                # Filter to match level WARN
-                log4perl.filter.MatchWarn  = Log::Log4perl::Filter::LevelMatch
-                log4perl.filter.MatchWarn.LevelToMatch  = WARN
-                log4perl.filter.MatchWarn.AcceptOnMatch = true
- 
-                # Filter to match level INFO
-                log4perl.filter.MatchInfo  = Log::Log4perl::Filter::LevelMatch
-                log4perl.filter.MatchInfo.LevelToMatch  = INFO
-                log4perl.filter.MatchInfo.AcceptOnMatch = true
- 
-                # Filter to match level TRACE
-                log4perl.filter.MatchTrace  = Log::Log4perl::Filter::LevelMatch
-                log4perl.filter.MatchTrace.LevelToMatch  = TRACE
-                log4perl.filter.MatchTrace.AcceptOnMatch = true
- 
-                # Filter to match level TRACE
-                log4perl.filter.NoTrace  = Log::Log4perl::Filter::LevelMatch
-                log4perl.filter.NoTrace.LevelToMatch  = TRACE
-                log4perl.filter.NoTrace.AcceptOnMatch = false
-
-
-                log4perl.appender.LOGFILE=Log::Log4perl::Appender::File
-                log4perl.appender.LOGFILE.filename= $logfile_path
-                log4perl.appender.LOGFILE.mode=append
-                log4perl.appender.LOGFILE.layout=Log::Log4perl::Layout::PatternLayout
-                log4perl.appender.LOGFILE.layout.ConversionPattern=%d %p> %F{1}:%L %M%n%m%n%n
-                log4perl.appender.LOGFILE.Filter = NoTrace
-
-                # Error appender
-                log4perl.appender.AppError = Log::Log4perl::Appender::File
-                log4perl.appender.AppError.filename = $logfile_path
-                log4perl.appender.AppError.layout   = SimpleLayout
-                log4perl.appender.AppError.Filter   = MatchError
- 
-                # Warning appender
-                log4perl.appender.AppWarn = Log::Log4perl::Appender::File
-                log4perl.appender.AppWarn.filename = $logfile_path
-                log4perl.appender.AppWarn.layout   = SimpleLayout
-                log4perl.appender.AppWarn.Filter   = MatchWarn
-
-                # Debug  appender
-                log4perl.appender.AppDebug = Log::Log4perl::Appender::File
-                log4perl.appender.AppDebug.filename = $logfile_path
-                log4perl.appender.AppDebug.layout   = SimpleLayout
-                log4perl.appender.AppDebug.Filter   = MatchDebug
-
-                # Trace  appender
-                log4perl.appender.AppTrace = Log::Log4perl::Appender::File
-                log4perl.appender.AppTrace.filename = $logtracefile_path
-                log4perl.appender.AppTrace.layout   = SimpleLayout
-                log4perl.appender.AppTrace.Filter   = MatchTrace
-
-                # Screen Appender (Info only)
-                log4perl.appender.Screen = Log::Log4perl::Appender::ScreenColoredLevels
-                log4perl.appender.Screen.stderr = 0
-                log4perl.appender.Screen.layout = Log::Log4perl::Layout::PatternLayout
-                log4perl.appender.Screen.layout.ConversionPattern = %d %m %n
-                log4perl.appender.Screen.Filter = MatchInfo
-
-
-            });
-        }
-    }
-}
+use Method::Signatures::Modifiers;
+use feature qw(say);
+BEGIN { our $Log_Level = 'info' }
 
 class Target::Classification {
 
@@ -207,33 +68,24 @@ class Target::Classification {
     
 }
 
-# This is just a Main Cmd:App - don't touch
-class MyApp extends MooseX::App::Cmd {
+class MyApp is dirty {
+    use MooseX::App qw(Color);
+    use Log::Any::App '$log',
+        -screen => { pattern_style => 'script_long' },
+        -file => { path => 'logs/', level => 'debug' };
 
-}
-
-class MyApp::Command {
-    # A Moose role for setting attributes from a simple configfile
-    # It uses Config:Any so it can handle many formats (YAML, Apace, JSON, XML, etc..)
-    with 'MooseX::SimpleConfig';
-    with 'MyApp::Log';
-
-    use List::MoreUtils;
-
-    # Control the '--configfile' option
-    has '+configfile' => (
-        traits      => ['Getopt'],
-        cmd_aliases => 'c',
-        isa         => 'Str',
-        is          => 'rw',
-        required    => 0,
-        documentation => 'Configuration file (accept the following formats: YAML, CONF, XML, JSON, etc)',
+    has 'log' => (
+        is            => 'ro',
+        isa           => 'Object',
+        required      => 1,
+        default       => sub { return $log },
+        documentation => 'Keep Log::Any::App object',
     );
-
 }
 
-class MyApp::Command::Classify {
-    extends 'MooseX::App::Cmd::Command', 'MyApp::Command';
+class MyApp::Classify {
+    extends 'MyApp'; # inherit log
+    use MooseX::App::Command;   # important
     use MooseX::FileAttribute;
     use Carp;
     use Bio::DB::Sam;
@@ -241,27 +93,29 @@ class MyApp::Command::Classify {
     use List::Util qw(max min sum);
     use Text::Padding;
 
-    # Class attributes (program options - MooseX::Getopt)
     has_file 'input_file' => (
-        traits        => ['Getopt'],
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
         cmd_aliases   => 'i',
         required      => 1,
         must_exist    => 1,
         documentation => 'Input file to be processed',
     );
-    
+
     has_file 'fasta_file' => (
-        traits        => ['Getopt'],
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
         cmd_aliases   => 'f',
         required      => 0,
-        must_exist    => 1, 
+        must_exist    => 1,
         documentation => 'Chromosome fasta file',
     );
 
     has 'bait_position' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
         is            => 'rw',
         isa           => 'Str',
-        traits        => ['Getopt'],
         cmd_aliases   => 'b',
         required      => 0,
         default       => 'chr15:61818182-61818339',
@@ -269,55 +123,60 @@ class MyApp::Command::Classify {
     );
 
     has 'enzime_restriction_size' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
         is            => 'rw',
         isa           => 'Int',
-        traits        => ['Getopt'],
-        cmd_aliases   => 'b',
+        cmd_aliases   => 'e',
         required      => 0,
-        default       => '4',
-        documentation => 'How much restriction enzime will cleave from bait
-        site. Default: 4',
+        default       => 4,
+        documentation => 'How much restriction enzime will cleave from bait site.',
     );
 
     has_file 'alignment_output_file' => (
-        traits        => ['Getopt'],
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
         cmd_aliases   => 'a',
         required      => 0,
         must_exist    => 0,
-        default => 'alignments_file.txt',
-        documentation => 'Name given for alignment file generated (default: alignments_file.txt)',
+        default       => 'alignments_file.txt',
+        documentation => 'Name given for alignment file generated.',
     );
 
     has 'output_path' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
         is            => 'rw',
         isa           => 'Str',
-        traits        => ['Getopt'],
         cmd_aliases   => 'o',
         required      => 0,
-        default => '.',
+        default       => '.',
         documentation => 'Path where the genereated files will be placed',
     );
 
-     has 'fragment_size' => (
-         is            => 'rw',
-         isa           => 'Int',
-         traits        => ['Getopt'],
-         cmd_aliases   => 's',
-         required      => 1,
-         default       => 36,
-         documentation => 'Mininum fragment size to be analyzed (for bait and target). Default: 36',
-     );
-     
-      has 'min_mapq' => (
-         is            => 'rw',
-         isa           => 'Int',
-         traits        => ['Getopt'],
-         cmd_aliases   => 'q',
-         required      => 1,
-         default       => 30,
-         documentation => 'Mininum SAM MAPQ each fragment should have to be analyzed (for bait and target). Default: 30',
-     );
-    
+    has 'fragment_size' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        is            => 'rw',
+        isa           => 'Int',
+        cmd_aliases   => 's',
+        required      => 1,
+        default       => 36,
+        documentation => 'Mininum fragment size to be analyzed (for bait and target).',
+    );
+
+    has 'min_mapq' => (
+        traits      => ['AppOption'],
+        cmd_type    => 'option',
+        is          => 'rw',
+        isa         => 'Int',
+        cmd_aliases => 'q',
+        required    => 1,
+        default     => 30,
+        documentation =>
+            'Mininum SAM MAPQ each fragment should have to be analyzed (for bait and target).',
+    );
+
       our $reads_to_clustering;
     
    
@@ -721,7 +580,7 @@ class MyApp::Command::Classify {
           . sum(@clusters_size);
 
 
-        $self->log_debug(join "\n",@summary);
+        $self->log->debug(join "\n",@summary);
 
         return \%cluster;
     }
@@ -973,13 +832,13 @@ class MyApp::Command::Classify {
             }
         }
         
-        $self->log_info("Creating Alignment output file..."); 
+        $self->log->info("Creating Alignment output file..."); 
         $self->show_clusters_alignment($alignment_cluster, \%classification);
 
 
         my %size;
 
-        #$self->log_trace(Dumper(%classification));
+        #$self->log->trace(Dumper(%classification));
 
         my @types = ( 'bait_deletion', 'target_deletion', 'insertion', 'microhomology' );
 
@@ -1238,7 +1097,7 @@ class MyApp::Command::Classify {
                 if ( $this_bait->end <= ($end - 1) + $self->enzime_restriction_size) {
                     $uniq_bait_before_break++;
                     $invalid_reads++;
-                    # $self->log_trace($this_bait->query->length); 
+                    # $self->log->trace($this_bait->query->length); 
                 }
                 # Search for reas with deletion in the breakpoint
                 else {
@@ -1295,7 +1154,7 @@ class MyApp::Command::Classify {
                         {
                             $enzime_cut = 1;
                            $alignments_to_cluster{$seq_id}{key} = $key;
-                            #$self->log_trace($key);
+                            #$self->log->trace($key);
 
                         }
                         elsif (   $del->{start} <= ( $end )
@@ -1304,7 +1163,7 @@ class MyApp::Command::Classify {
                         {
                             $enzime_cut = 2;
                             $alignments_to_cluster{$seq_id}{key} = $key;
-                            #$self->log_trace($key);
+                            #$self->log->trace($key);
 
                         }
                         elsif (   $del->{start} > ( $end )
@@ -1326,7 +1185,7 @@ class MyApp::Command::Classify {
                                 $self->enzime_restriction_size ).'_'.$this_strand.'_0_0';
 
                             $alignments_to_cluster{$seq_id}{key} = $this_key;
-                            $self->log_trace($this_key);
+                            $self->log->trace($this_key);
 
                         }
                         # Check if we have a pseudo cut
@@ -1357,7 +1216,7 @@ class MyApp::Command::Classify {
                               . $del_after_break;
 
                             $alignments_to_cluster{$seq_id}{key} = $key;
-                            #$self->log_trace($this_key);
+                            #$self->log->trace($this_key);
 
                         }
                         elsif ( $del->{end} > ( $end  )
@@ -1386,7 +1245,7 @@ class MyApp::Command::Classify {
                               . $del_after_break;
 
                             $alignments_to_cluster{$seq_id}{key} = $key;
-                            #$self->log_trace($this_key);
+                            #$self->log->trace($this_key);
 
                         }
 
@@ -1561,7 +1420,7 @@ class MyApp::Command::Classify {
           . $reads_to_clustering . " ("
           . ( $reads_to_clustering / $total_reads * 100 ) . "%)";
 
-        $self->log_debug( join "\n", @summary );
+        $self->log->debug( join "\n", @summary );
 
         return \%alignments_to_cluster;
     }
@@ -1590,34 +1449,34 @@ class MyApp::Command::Classify {
     }
     
     # method used to run the command
-    method execute ($opt,$args) {
+    method run {
 
         # Given the BAM file, get alignments to cluster.
         # Reliable reads are those which overlap this (hard coded) position by
         # default:
         # 
         # chr15:61818182-61818333
-        $self->log_info("Getting reliable alignments...");
+        $self->log->info("Getting reliable alignments...");
         my $reliable_alignments = $self->get_reliable_alignments();
 
         # print Dumper($reads_to_cluster);
-        $self->log_info("Clustering...");
+        $self->log->info("Clustering...");
         my $alignments_cluster = $self->clustering_alignments($reliable_alignments);
         
         # Generating target bed file
-        $self->log_info("Generating Target BED file...");
+        $self->log->info("Generating Target BED file...");
         $self->generate_bedfile($alignments_cluster);
 
-        #$self->log_info("Creating Alignment output file..."); 
+        #$self->log->info("Creating Alignment output file..."); 
         #$self->show_clusters_alignment($alignments_cluster);
 
-        $self->log_info("Classifying aligments clusters");
+        $self->log->info("Classifying aligments clusters");
         $self->classify($alignments_cluster);
         
     }
 
 }
 
-class main {
-    MyApp->run;
+class Main {
+    MyApp->new_with_command->run();
 }
