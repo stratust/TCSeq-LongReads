@@ -89,7 +89,6 @@ class MyApp::Classify {
     use MooseX::FileAttribute;
     use Carp;
     use Bio::DB::Sam;
-    use Data::Dumper;
     use List::Util qw(max min sum);
     use Text::Padding;
 
@@ -356,7 +355,7 @@ class MyApp::Classify {
 
     }
 
-=cut
+=head2 Clustering logic
 
     Given a read splitting in two fragments in the same chromosome:
 
@@ -1275,12 +1274,10 @@ class MyApp::Classify {
             }
 
 
-=cut
-                # define the smallest alignment start as bait
-                #my @aux = sort {$a->start <=> $b->start} @{$bait{$seq_id}};
-                #my $local_bait = shift @aux;
-                #$alignments_to_cluster{$seq_id}{bait} = $local_bait;
-=cut
+            # define the smallest alignment start as bait
+            #my @aux = sort {$a->start <=> $b->start} @{$bait{$seq_id}};
+            #my $local_bait = shift @aux;
+            #$alignments_to_cluster{$seq_id}{bait} = $local_bait;
 
             my $local_bait = $bait{$seq_id}->[0];
             $alignments_to_cluster{$seq_id}{bait} = $bait{$seq_id}->[0];
