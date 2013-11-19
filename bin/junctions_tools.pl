@@ -538,15 +538,15 @@ class MyApp::Classify {
             # Start key
             my $key = $bait->seq_id . '_' . $corrected_bait_end . '_' . $bait_strand;
 
-            my %targets;
-            if ( $this_read->{targets} ) {
-                %targets = %{ $this_read->{targets} };
+            my %bait_targets;
+            if ( $this_read->{bait_targets} ) {
+                %bait_targets = %{ $this_read->{bait_targets} };
 
                 # Sorting by read start
-                foreach my $query_start ( sort { $a <=> $b } keys %targets ) {
+                foreach my $query_start ( sort { $a <=> $b } keys %bait_targets ) {
 
                     # Usually Should have just one splice here
-                    foreach my $target ( @{ $targets{$query_start} } ) {
+                    foreach my $target ( @{ $bait_targets{$query_start} } ) {
 
                         my $chr    = $target->seq_id;
                         my $strand = '+';
@@ -607,8 +607,33 @@ class MyApp::Classify {
                         $key .= '_' . $diff_read .'-'.$primer_name;
                     }
                 }
+
+                # Looking for targets
+                if ( $this_read->{real_targets} ) {
+                    my @aux = split /\|/, $key;
+                    if ( $aux[$#aux] =~ /(chr\S+)_(\d+)/ ) {
+                        my ( $b_target_chr, $b_target_start ) = ( $1, $2 );
+
+                        foreach my $t ( @{ $this_read->{real_targets} } ) {
+                            if ( $t->{chr} eq $b_target_chr ) {
+                                my $prime5 = $t->{start};
+                                if ( $t->{strand} eq "-" ) {
+                                    $prime5 = $t->{end};
+                                }
+                                if ( abs( $b_target_start - $prime5 ) <= 1000 ) {
+                                    $key .= '_(' . $t->{chr} . '_' . $prime5 .')' ;
+                                    push @{ $cluster_ref->{$key} }, $this_read;
+                                }
+                            }
+                        }
+
+                    }
+                }
             }
-            push @{ $cluster_ref->{$key} }, $this_read;
+
+            unless ($self->target_file){
+                push @{ $cluster_ref->{$key} }, $this_read;
+            }
     }
 
 
@@ -668,10 +693,10 @@ class MyApp::Classify {
                 say $out "";
 
                 
-                foreach my $qstart ( sort {$a <=> $b} keys %{ $read->{targets} } ) {
+                foreach my $qstart ( sort {$a <=> $b} keys %{ $read->{bait_targets} } ) {
 
 
-                    foreach my $f ( @{ $read->{targets}->{$qstart} } ) {
+                    foreach my $f ( @{ $read->{bait_targets}->{$qstart} } ) {
                    #     say $out ">" 
                           #. $f->query->display_name . " ("
                           #. length( $f->target->seq->seq ) . "pb)";
@@ -1448,7 +1473,7 @@ class MyApp::Classify {
          {
          sequence_id => {
                bait => align_obj,
-               targets => [
+               bait_targets => [
                    align_obj,
                    align_obj
                ]
@@ -1521,7 +1546,7 @@ class MyApp::Classify {
 
         # $alignments_to_cluster{'sequence_id'} = {
         #       bait => align_obj,
-        #       targets => query_start =>  [
+        #       bait_targets => query_start =>  [
         #                                   align_obj,
         #                                   align_obj
         #                                  ]
@@ -1615,7 +1640,7 @@ class MyApp::Classify {
                 }
 
                 push
-                    @{ $alignments_to_cluster{$seq_id}{targets}{$query_start} },
+                    @{ $alignments_to_cluster{$seq_id}{bait_targets}{$query_start} },
                     $f;
             }
             } 
@@ -1681,7 +1706,7 @@ class MyApp::Classify {
                     $chr, 
                     $start - 1, 
                     $start,
-                    "break$i-$primer", 
+                    "$key", 
                     scalar( @{ $alignment_cluster->{$key} } ), 
                     $strand,
                     $start - 1, 
@@ -1693,6 +1718,38 @@ class MyApp::Classify {
         }
         close($out);
 
+    }
+
+    method add_target_information (HashRef $cluster) {
+        my $bame         = Bio::DB::Bam->open( $self->target_file );
+        my $header       = $bame->header;
+        my $target_count = $header->n_targets;
+        my $target_names = $header->target_name;
+
+        $self->log->debug( 'target bam file: ' . $self->target_file );
+
+        while ( my $align = $bame->read1 ) {
+            my ( $qname, $query_start, $query_end, $query_dna );
+
+            $qname = $align->qname;
+            if ( $align->unmapped ) {
+                next;
+            }
+            else {
+                next unless $align->qual >= $self->min_mapq;
+                if ( $cluster->{$qname} ) {
+                    my $strand = '+';
+                    $strand = '-' if $align->strand == -1;
+                    my %h =(
+                        chr => $target_names->[$align->tid],
+                        start => $align->pos,
+                        end => $align->calend,
+                        strand => $strand,
+                    );
+                    push(@{$cluster->{$qname}->{real_targets}}, \%h);
+                }
+           }
+        }
     }
 
     # method used to run the command
@@ -1707,6 +1764,12 @@ class MyApp::Classify {
         my $aln_right = $self->get_reliable_alignments('right');
         my $aln_left = $self->get_reliable_alignments('left');
         my $reliable_alignments = { %$aln_right, %$aln_left };
+
+        if ($self->target_file){
+
+            $self->log->info("Adding real target information...");
+            $self->add_target_information($reliable_alignments);
+        }
 
         # print Dumper($reads_to_cluster);
         $self->log->info("Clustering...");
