@@ -154,6 +154,7 @@ class MyApp::Classify {
     }
 
     # Global variables
+    our $reads_to_clustering_LR;
     our $reads_to_clustering;
     our $uniq_bait_without_target;
     our $uniq_bait_with_target;
@@ -467,8 +468,18 @@ class MyApp::Classify {
                   $alignments_to_cluster->{$read_id};
                 next;
             }
-             
-            $self->_clustering_reads($alignments_to_cluster->{$read_id},$primer_name,\%cluster);
+            
+            if ($primer_name =~ /left/){
+                $self->_clustering_reads($alignments_to_cluster->{$read_id},$primer_name,\%cluster);
+            }
+            elsif ($primer_name =~ /right/){
+                
+                $self->_clustering_reads_right($alignments_to_cluster->{$read_id},$primer_name,\%cluster);
+            }
+            else{
+                $self->log->error("Cannot attribute primer left or right to: $primer_name");
+            }
+
         }
 
         my @summary;
@@ -476,7 +487,7 @@ class MyApp::Classify {
 
         push @summary, "\t- Total number of clusters: "
           . $total_clusters . "("
-          . ($total_clusters / $reads_to_clustering * 100)."%)";
+          . ($total_clusters / $reads_to_clustering_LR * 100)."%)";
 
         my @clusters_size;
         foreach my $k (keys %cluster){
@@ -512,6 +523,9 @@ class MyApp::Classify {
             my $bait = $this_read->{bait};
             my $bait_strand = '+';
 
+            $self->log->trace("Read ID: ".$bait->qname);
+            $self->log->trace("------------------------------------------------");
+ 
             $bait_strand = '-' if $bait->strand == -1;
 
             # Get read start and end
@@ -567,17 +581,23 @@ class MyApp::Classify {
                         # Keep diff between bait and target
                         # Information necessary to know if is blunt, insertion or deletion
                         my $diff_read;
+                        $self->log->trace( "\ttarget_query_start " . $target_query_start );
+                        $self->log->trace( "\ttarget_query_end " . $target_query_end );
+                        $self->log->trace( "\tbait_query_start " . $bait_query_start );
+                        $self->log->trace( "\tbait_query_end " . $bait_query_end );
+
 
                         if ( $strand eq $bait_strand ) {
 
                             if ( $bait_strand eq '+' ) {
                                 $diff_read =
                                   $target_query_start - $bait_query_end;
+                                $diff_read += -1;
                             }
                             else {
-
-                                $diff_read =
-                                  $target_query_end - $bait_query_start;
+                                die "This cannot happen!";
+                                #$diff_read =
+                                #  $target_query_end - $bait_query_start;
                             }
 
                             $key .= '|'
@@ -590,11 +610,12 @@ class MyApp::Classify {
                             if ( $bait_strand eq '+' ) {
                                 $diff_read =
                                   $target_query_end - $bait_query_end;
+                                $diff_read += -1;
                             }
                             else {
-
-                                $diff_read =
-                                  $bait_query_start - $target_query_start;
+                                die "This cannot happen!";
+                                #$diff_read =
+                                #  $bait_query_start - $target_query_start;
                             }
 
                             $key .= '|'
@@ -608,32 +629,183 @@ class MyApp::Classify {
                     }
                 }
 
+                $self->log->trace("\tDefined key: $key");
+
                 # Looking for targets
-                if ( $this_read->{real_targets} ) {
-                    my @aux = split /\|/, $key;
-                    if ( $aux[$#aux] =~ /(chr\S+)_(\d+)/ ) {
-                        my ( $b_target_chr, $b_target_start ) = ( $1, $2 );
-
-                        foreach my $t ( @{ $this_read->{real_targets} } ) {
-                            if ( $t->{chr} eq $b_target_chr ) {
-                                my $prime5 = $t->{start};
-                                if ( $t->{strand} eq "-" ) {
-                                    $prime5 = $t->{end};
-                                }
-                                if ( abs( $b_target_start - $prime5 ) <= 1000 ) {
-                                    $key .= '_(' . $t->{chr} . '_' . $prime5 .')' ;
-                                    push @{ $cluster_ref->{$key} }, $this_read;
-                                }
-                            }
-                        }
-
-                    }
-                }
+                $self->cluster_with_targets($this_read, $cluster_ref, $key)
+ 
             }
 
             unless ($self->target_file){
                 push @{ $cluster_ref->{$key} }, $this_read;
             }
+    }
+
+
+    method _clustering_reads_right(HashRef $this_read, Str $primer_name, HashRef $cluster_ref) {
+            my ( $chr, $start, $end ) = @{ $self->_baits->{$primer_name} }{ (qw/chr start end/) };
+            
+           # Bio::DB::Sam alignment object
+            my $bait = $this_read->{bait};
+            $self->log->trace("Read ID: ".$bait->qname);
+            $self->log->trace("------------------------------------------------");
+ 
+            my $bait_strand = '+';
+
+            $bait_strand = '-' if $bait->strand == -1;
+
+            # Get read start and end
+            my ( $bait_query_end, $bait_query_start );
+
+            # For reads strand matters
+            if ( $bait_strand eq '+' ) {
+                $bait_query_end   = $bait->query->end;
+                $bait_query_start = $bait->query->start;
+            }
+            else {
+                my $bait_length = length( $bait->query->seq->seq ); 
+                $bait_query_end =   (  $bait_length - $bait->query->end );
+                $bait_query_start = (  $bait_length - $bait->query->start );
+            }
+
+            #Correcting pseudoblunt targens in split-reads:
+            # verify if bait pass througth breakpoint
+            my $corrected_bait_end = $bait->start;
+            if ( $bait->start > ( $start - 1 ) ) {
+                $corrected_bait_end = $start;
+            }
+            
+            # Start key
+            my $key = $bait->seq_id . '_' . $corrected_bait_end . '_' . $bait_strand;
+
+            my %bait_targets;
+            if ( $this_read->{bait_targets} ) {
+                %bait_targets = %{ $this_read->{bait_targets} };
+                
+                # Sorting by read start
+                foreach my $query_start ( sort { $a <=> $b } keys %bait_targets ) {
+                    
+                    # Usually Should have just one splice here
+                    foreach my $target ( @{ $bait_targets{$query_start} } ) {
+
+                        my $chr    = $target->seq_id;
+                        my $strand = '+';
+                        $strand = '-' if $target->strand == -1;
+
+                        my ( $target_query_end, $target_query_start );
+
+                        if ( $strand eq '+' ) {
+                            $target_query_end   = $target->query->end;
+                            $target_query_start = $target->query->start;
+                        }
+                        else {
+                            my $seq_length = length( $target->query->seq->seq );
+                            $target_query_end   = ( $seq_length - $target->query->end );
+                            $target_query_start = ( $seq_length - $target->query->start );
+                        }
+
+                        # Keep diff between bait and target
+                        # Information necessary to know if is blunt, insertion or deletion
+                        my $diff_read;
+                        $self->log->trace( "\ttarget_query_start " . $target_query_start );
+                        $self->log->trace( "\ttarget_query_end " . $target_query_end );
+                        $self->log->trace( "\tbait_query_start " . $bait_query_start );
+                        $self->log->trace( "\tbait_query_end " . $bait_query_end );
+
+                        if ( $strand eq $bait_strand ) {
+
+                            if ( $bait_strand eq '+' ) {
+                                die "Error: something is wrong here!"
+                                #$diff_read =
+                                #  $target_query_start - $bait_query_start;
+                            }
+                            else {
+
+                                $diff_read =
+                                  $target_query_end - $bait_query_start;
+
+                                $diff_read += -1;
+                            }
+
+                            $key .= '|'
+                              . $target->seq_id . '_'
+                              . $target->end . '_'
+                              . $strand;
+
+                        }
+                        else {
+                            if ( $bait_strand eq '+' ) {
+                                # this should not occur;
+                                #$diff_read =
+                                #  $target_query_end - $bait_query_end;
+                                die "Error: something is wrong here!"
+                            }
+                            else {
+
+                                $diff_read =
+                                  $target_query_start - $bait_query_start;
+
+                                $diff_read += -1;
+                            }
+
+                            $key .= '|'
+                              . $target->seq_id . '_'
+                              . $target->start . '_'
+                              . $strand;
+                        }
+
+                        # Add diff to key
+                        $key .= '_' . $diff_read .'-'.$primer_name;
+                    }
+                }
+               
+                $self->log->trace("\tDefined key: $key");
+
+                # Looking for targets
+                $self->cluster_with_targets($this_read, $cluster_ref, $key)
+            }
+
+            unless ($self->target_file){
+                push @{ $cluster_ref->{$key} }, $this_read;
+            }
+    }
+
+
+    method cluster_with_targets (HashRef $this_read, HashRef $cluster_ref, Str $key) {
+        if ( $this_read->{real_targets} ) {
+
+            $self->log->trace("\t\tLooking for targets:");
+            $self->log->trace("\t\t---------------------------------------------");
+
+            my @aux = split /\|/, $key;
+
+            if ( $aux[$#aux] =~ /^(chr\w+)_(\d+).*/ ) {
+                my ( $b_target_chr, $b_target_start ) = ( $1, $2 );
+
+                $self->log->trace("\t\tFrom bait: chrom($b_target_chr), start($b_target_start)");
+
+                foreach my $t ( @{ $this_read->{real_targets} } ) {
+                    if ( $t->{chr} eq $b_target_chr ) {
+                        my $prime5 = $t->{start};
+                        if ( $t->{strand} eq "-" ) {
+                            $prime5 = $t->{end};
+                        }
+
+                        $self->log->trace(
+                            "\t\tSame chr:" . $t->{chr} . "_" . $prime5 . "_" . $t->{strand} );
+
+                        my $distance_from_bait = abs( $b_target_start - $prime5 );
+
+                        $self->log->trace("\t\tDistance from bait: $distance_from_bait");
+
+                        if ( $distance_from_bait <= 1000 ) {
+                            $key .= '_(' . $t->{chr} . '_' . $prime5 . ')';
+                            push @{ $cluster_ref->{$key} }, $this_read;
+                        }
+                    }
+                }
+            }
+        }
     }
 
 
@@ -1017,6 +1189,11 @@ class MyApp::Classify {
         push @summary, "\t- Total of reads: " . $info->{total_reads};
         push @summary, "\t- Total of mapped reads: " . $info->{total_reads_mapped};
         push @summary, "\t- Total of read-splits: " . $info->{total_reads_split};
+        
+        $info->{total_reads}||=1;
+        $info->{total_reads_mapped}||=1;
+        $info->{total_reads_split}||=1;
+        
 
         push @summary,
             "\t- Total of reads with unique bait: "
@@ -1032,7 +1209,7 @@ class MyApp::Classify {
             "\t- Total of reads with unique bait and with targets: "
           . $info->{uniq_bait_with_target} . " ("
           . ( $info->{uniq_bait_with_target} / $info->{total_reads} * 100 ) . "%)";
-
+        
         push @summary,
             "\t\t - Total of reads with unique bait and with targets accepted (based on quality): "
           . $info->{uniq_bait_with_target_accepted} . " ("
@@ -1043,40 +1220,42 @@ class MyApp::Classify {
           . $info->{uniq_bait_without_target} . " ("
           . ( $info->{uniq_bait_without_target} / $info->{total_reads} * 100 ) . "%)";
 
+        $info->{uniq_bait_without_target}||=1;
+
         my $total_bait_after_break_no_target =
           $info->{bait_cut_with_deletions} + $info->{bait_blunt_cut} + $info->{bait_no_cut};
 
         push @summary,
             "\t\t - Bait doesn't cross breakpoint': "
           . $info->{uniq_bait_before_break} . " ("
-          . ( $info->{uniq_bait_before_break} / $info->{uniq_bait_without_target} * 100 )
+          . ( eval{ $info->{uniq_bait_before_break} / $info->{uniq_bait_without_target} } * 100 )
           . "%)";
 
         push @summary,
             "\t\t - Bait with no cut (intact restriction site): "
           . $info->{bait_no_cut} . " ("
-          . ( $info->{bait_no_cut} / $info->{uniq_bait_without_target} * 100 ) . "%)";
+          . ( eval{ $info->{bait_no_cut} / $info->{uniq_bait_without_target} } * 100 ) . "%)";
 
         push @summary,
             "\t\t - Bait with blunt cut (accepted): "
           . $info->{bait_blunt_cut} . " ("
-          . ( $info->{bait_blunt_cut} / $info->{uniq_bait_without_target} * 100 ) . "%)";
+          . ( eval{ $info->{bait_blunt_cut} / $info->{uniq_bait_without_target} } * 100 ) . "%)";
 
         push @summary,
             "\t\t - Bait with pseudo-blunt cut (accepted): "
           . $info->{bait_pseudoblunt_cut} . " ("
-          . ( $info->{bait_pseudoblunt_cut} / $info->{uniq_bait_without_target} * 100 ) . "%)";
+          . ( eval{ $info->{bait_pseudoblunt_cut} / $info->{uniq_bait_without_target} } * 100 ) . "%)";
 
         push @summary,
             "\t\t - Bait cut with deletions (accepted): "
           . $info->{bait_cut_with_deletions} . " ("
-          . ( $info->{bait_cut_with_deletions} / $info->{uniq_bait_without_target} * 100 )
+          . ( eval{ $info->{bait_cut_with_deletions} / $info->{uniq_bait_without_target} } * 100 )
           . "%)";
 
         push @summary,
             "\t\t - Bait psedocut with deletions (accepted): "
           . $info->{bait_pseudocut_with_deletions} . " ("
-          . ( $info->{bait_pseudocut_with_deletions} / $info->{uniq_bait_without_target} * 100 )
+          . ( eval{ $info->{bait_pseudocut_with_deletions} / $info->{uniq_bait_without_target} } * 100 )
           . "%)";
 
         push @summary,
@@ -1658,6 +1837,8 @@ class MyApp::Classify {
         my $uniq_baits            = scalar @uniq_bait_reads;
         my $duplicated_bait_reads = @duplicated_bait_reads;
         $reads_to_clustering   = scalar keys %alignments_to_cluster;
+        
+        $reads_to_clustering_LR += $reads_to_clustering;
 
         my %info = (
             total_reads_mapped             => $total_reads_mapped,
@@ -1736,7 +1917,7 @@ class MyApp::Classify {
                 next;
             }
             else {
-                next unless $align->qual >= $self->min_mapq;
+                next if $align->qual < $self->min_mapq;
                 if ( $cluster->{$qname} ) {
                     my $strand = '+';
                     $strand = '-' if $align->strand == -1;

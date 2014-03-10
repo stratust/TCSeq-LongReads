@@ -44,12 +44,59 @@ class TCSeq::LongReads {
             'Count position of true barcode (has linker if in the middle) in sequences',
     );
 
+    has 'output_dir' => (
+        is       => 'rw',
+        isa      => 'Str',
+        required => 1,
+    );
+
+    has 'bait_file' => (
+        is       => 'rw',
+        isa      => 'Str',
+        required => 1,
+    );
+
+    has 'target_file' => (
+        is       => 'rw',
+        isa      => 'Str',
+        required => 1,
+    );
+
+    has 'target' => (
+        is      => 'rw',
+        isa     => 'Bio::SeqIO',
+        lazy    => 1,
+        builder => '_build_target'
+    );
+
+    has 'bait' => (
+        is      => 'rw',
+        isa     => 'Bio::SeqIO',
+        lazy    => 1,
+        builder => '_build_bait'
+    );
+
+
     our %barcode_position;         # Keep position of all barcodes
     our %true_barcode_position;    # Keep position of all barcodes with linker sequence at 5' end
 
-    my $bait_file   = Bio::SeqIO->new( -file => '>bait_test.fa',   -format => 'Fasta' );
-    my $target_file = Bio::SeqIO->new( -file => '>target_test.fa', -format => 'Fasta' );
+    method _build_bait {
 
+        my $bait = Bio::SeqIO->new(
+            -file   => '>' . $self->output_dir . '/' . $self->bait_file,
+            -format => 'Fasta'
+        );
+        return $bait;
+    }
+
+    method _build_target {
+
+        my $target = Bio::SeqIO->new(
+            -file   => '>' . $self->output_dir . '/' . $self->target_file,
+            -format => 'Fasta'
+        );
+        return $target;
+    }
 
 =head2 annotate_primer
 
@@ -143,7 +190,7 @@ class TCSeq::LongReads {
 
 #                say join "\t",($align->qname, $seqid, $query_start, $query_end, $strand, $cigar, $query_dna );
             $i++;
-            last if $i == 1000;
+            #last if $i == 1000;
         }
  
     }
@@ -196,10 +243,10 @@ class TCSeq::LongReads {
                 # check reverse barcode and trim sequences
                 $self->_trim_sequences($s1,$s2);
 
-                $bait_file->write_seq(
+                $self->bait->write_seq(
                     $self->_build_bioseq_object( $qname, $s1, $s1->{is_bait} ) 
                 );
-                $target_file->write_seq(
+                $self->target->write_seq(
                     $self->_build_bioseq_object( $qname, $s2, $s1->{is_bait} ) 
                 );
             }
@@ -218,10 +265,10 @@ class TCSeq::LongReads {
                 $self->_trim_sequences($s2,$s1);
 
                 # Write into fasta file
-                $bait_file->write_seq( 
+                $self->bait->write_seq( 
                     $self->_build_bioseq_object( $qname, $s2, $s2->{is_bait} ) 
                 );
-                $target_file->write_seq(
+                $self->target->write_seq(
                     $self->_build_bioseq_object( $qname, $s1, $s2->{is_bait} ) 
                 );
             }
@@ -315,6 +362,103 @@ class TCSeq::LongReads {
         
         return $obj;
     }
+
+
+    method _search_barcode (Str $sequence) {
+        my %aux;
+
+        my @barcodes = &match_all_positions( $self->barcode, $sequence );
+        
+        if (@barcodes) {
+            
+            $aux{n_barcodes} = scalar @barcodes;
+            $aux{barcode_pos} = \@barcodes;
+            
+            foreach my $pos (  @barcodes) {
+                my $barcode_start = $pos->[0] ;
+                my $barcode_end = $pos->[1] ;
+                $barcode_position{$barcode_start}++;
+                
+                # look for linker if barcode is not in the beginning
+                my $has_linker;
+                if ( $barcode_start > 0 ) {
+                    my $debug;
+                    
+                    # Look for both linkers
+                    foreach my $l ( @{ $self->linkers } ) {
+                        my ($seq_before_barcode);
+                        my $linker = $l;
+
+                        if ( $barcode_start == length($linker) ) {
+                            $seq_before_barcode =
+                              substr( $sequence, 0, $barcode_start );
+                        }
+                        elsif ( $barcode_start < length($linker) ) {
+                            $seq_before_barcode =
+                              substr( $sequence, 0, $barcode_start );
+                            $linker =
+                              substr( $linker, -length($seq_before_barcode) );
+                        }
+                        else {
+                            $seq_before_barcode =
+                              substr( $sequence,
+                                ( $barcode_start - length($linker) ),
+                                length($linker) );
+                        }
+                        
+                        my $match = amatch($linker, [ '7%' ], $seq_before_barcode);
+                        
+                        if ($match){
+                            $has_linker++;
+                            $true_barcode_position{$barcode_start}{linkers}{$l}++;
+                            #if ($barcode_start > 237){
+                            #    say "Linker: $linker";
+                            #    say "Before Barcode: $seq_before_barcode";
+                            #    say "Start: $barcode_start";
+                            #    say $name;
+                            #    say $sequence;
+                            #}
+                        }
+                    }
+                    if ($has_linker){
+                        $true_barcode_position{$barcode_start}{count}++;
+                        $aux{last_barcode_pos} = $pos;
+                        
+                        $aux{seq_after_barcode} = substr($sequence,$barcode_end, 15);
+                    }
+                }
+                else{
+                    $true_barcode_position{$barcode_start}{count}++;
+                    $aux{last_barcode_pos} = $pos;
+                    $aux{seq_after_barcode} = substr($sequence,$barcode_end, 15);
+                }
+                
+            }
+        }
+        
+        return \%aux;
+    }
+
+    method _search_barcode_complement (Str $sequence ) {
+        my %hash;
+
+        my $reversed_barcode = $self->_reverse_complement( $self->barcode );
+
+        my @barcodes = &match_all_positions( $reversed_barcode, $sequence );
+
+        if (@barcodes) {
+            my $pos = pop @barcodes;
+            my $barcode_start = $pos->[0];
+            my $barcode_end = $pos->[1];
+
+            my $aux = substr($sequence, ($barcode_start - 15 ) , 15);
+            # save in right orientation to compare with barcode
+            $hash{sequence_before_barcode_complement} = $self->_reverse_complement($aux);
+            $hash{pos} = $pos;
+        }
+        return \%hash;
+    }
+
 
 
 # Auxiliary methods

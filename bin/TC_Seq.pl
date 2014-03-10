@@ -20,12 +20,10 @@ class MyApp is dirty {
     );
 }
 
-
 class MyApp::Process_Primers {
     extends 'MyApp'; # inherit log
     use MooseX::App::Command;    # important
     use MooseX::FileAttribute;
-    use lib "lib";
     use TCSeq::LongReads;
 
     command_short_description q[This command is awesome];
@@ -49,6 +47,35 @@ class MyApp::Process_Primers {
         documentation => q[Very important option!],
     );
 
+    option 'output_dir' => (
+          is            => 'rw',
+          isa           => 'Str',
+          required      => '1',
+          cmd_aliases   => [qw(o)],
+          default => 'results',
+          documentation => q['Output directory'],
+    );
+
+    option 'target_filename' => (
+        is            => 'rw',
+        isa           => 'Str',
+        required      => '1',
+        cmd_aliases   => [qw(t)],
+        default       => 'targets_filtered.fasta',
+        documentation => q[Name of the target file],
+    );
+
+     option 'bait_filename' => (
+        is            => 'rw',
+        isa           => 'Str',
+        required      => '1',
+        cmd_aliases   => [qw(b)],
+        default       => 'baits_filtered.fasta',
+        documentation => q[Name of the bait file],
+    );
+
+   
+
 
     method run {        
         my $cmd;
@@ -61,7 +88,10 @@ class MyApp::Process_Primers {
             linkers => [ 
                 'GCAGCGGATAACAATTTCACACAGGACGTACTGTGC', 
                 'GTAAAGCTCAGTCAAGTACTGTGC' 
-            ]
+            ],
+            output_dir => $self->output_dir,
+            bait_file => $self->bait_filename,
+            target_file => $self->target_filename
         );
 
         $tcseq->annotate_primer(
@@ -72,7 +102,6 @@ class MyApp::Process_Primers {
         $self->log->warn("==> END $cmd <==");
     }
 }
-
 
 class Main {
     import MyApp;
