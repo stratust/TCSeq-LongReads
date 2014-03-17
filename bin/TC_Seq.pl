@@ -179,10 +179,25 @@ class MyApp::RefineBreakpoints {
 
     method refine_breakpoints (HashRef $clusters, HashRef $total) {
         foreach my $shear_key ( sort { $a cmp $b } keys %{$clusters} ) {
-            foreach  my $n_reads ( sort { $a <=> $b } keys %{ $clusters->{$shear_key} } )
+            # print breakpoint with more reads
+            foreach  my $n_reads ( sort { $b <=> $a } keys %{ $clusters->{$shear_key} } )
             {
                 my $row = shift @{ $clusters->{$shear_key}->{$n_reads} };
                 my @F = split "\t", $row;
+                
+                # check if number of elements in the shear cluster is higher
+                # than 1
+                my @keys = sort {$b <=> $a} keys %{ $clusters->{$shear_key}   };
+                my $type;
+                if ( scalar @keys > 1 ) {
+                    if ( $clusters->{$shear_key}->{ $keys[0] } == $clusters->{ $keys[1] } ) {
+                        $type = '*';
+                    }
+                    else {
+                        $type = '#';
+                    }
+                }
+                $F[3].=$type if $type;
                 $F[4] = $total->{$shear_key};
                 say join "\t", @F;
                 last;
