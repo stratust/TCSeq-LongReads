@@ -595,7 +595,8 @@ class MyApp::Classify {
                                 $diff_read += -1;
                             }
                             else {
-                                die "This cannot happen!";
+                                $self->log->warn("This cannot happen!");
+                                next;
                                 #$diff_read =
                                 #  $target_query_end - $bait_query_start;
                             }
@@ -613,7 +614,8 @@ class MyApp::Classify {
                                 $diff_read += -1;
                             }
                             else {
-                                die "This cannot happen!";
+                                $self->log->warn("This cannot happen!");
+                                next;
                                 #$diff_read =
                                 #  $bait_query_start - $target_query_start;
                             }
@@ -715,7 +717,9 @@ class MyApp::Classify {
                         if ( $strand eq $bait_strand ) {
 
                             if ( $bait_strand eq '+' ) {
-                                die "Error: something is wrong here!"
+                                #die "Error: something is wrong here!"
+                                $self->log->warn("This cannot happen!");
+                                next;
                                 #$diff_read =
                                 #  $target_query_start - $bait_query_start;
                             }
@@ -738,7 +742,9 @@ class MyApp::Classify {
                                 # this should not occur;
                                 #$diff_read =
                                 #  $target_query_end - $bait_query_end;
-                                die "Error: something is wrong here!"
+                                #die "Error: something is wrong here!"
+                                $self->log->warn("This cannot happen!");
+                                next;
                             }
                             else {
 
