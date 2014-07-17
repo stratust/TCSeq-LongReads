@@ -1,5 +1,4 @@
 #!/usr/bin/env perl
-#
 use feature qw(say);
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
@@ -19,6 +18,7 @@ class MyApp is dirty {
         documentation => 'Keep Log::Any::App object',
     );
 }
+
 
 class MyApp::Process_Primers {
     extends 'MyApp'; # inherit log
@@ -103,6 +103,7 @@ class MyApp::Process_Primers {
     }
 }
 
+
 class MyApp::RefineBreakpoints {
     extends 'MyApp'; # inherit log
     use MooseX::App::Command;    # important
@@ -178,30 +179,41 @@ class MyApp::RefineBreakpoints {
 
 
     method refine_breakpoints (HashRef $clusters, HashRef $total) {
+
         foreach my $shear_key ( sort { $a cmp $b } keys %{$clusters} ) {
             # print breakpoint with more reads
-            foreach  my $n_reads ( sort { $b <=> $a } keys %{ $clusters->{$shear_key} } )
-            {
-                my $row = shift @{ $clusters->{$shear_key}->{$n_reads} };
-                my @F = split "\t", $row;
-                
-                # check if number of elements in the shear cluster is higher
-                # than 1
-                my @keys = sort {$b <=> $a} keys %{ $clusters->{$shear_key}   };
-                my $type;
-                if ( scalar @keys > 1 ) {
-                    if ( $clusters->{$shear_key}->{ $keys[0] } == $clusters->{ $keys[1] } ) {
-                        $type = '*';
-                    }
-                    else {
-                        $type = '#';
-                    }
+
+            # Get the number of supporting reads for each brekpoint with a
+            # common shear
+            my @reverse_n_reads_for_this_shear =
+                sort { $b <=> $a } keys %{ $clusters->{$shear_key} };
+
+            # Get highest number of reads that support this shear
+            my $highest_number_of_reads = $reverse_n_reads_for_this_shear[0];
+
+            # Get best breapoints with highest number of shears ( could be one
+            # or more )
+            my @best_breakpoints = @{$clusters->{$shear_key}->{$highest_number_of_reads}};
+
+            my $type;
+
+            # If the shear end has more than one breakpoint
+            if ( scalar @reverse_n_reads_for_this_shear > 1 ) {
+                # if the there is more than one best breakpoint choose the first
+                if ( scalar @best_breakpoints > 1 ) {
+                    $type = '#';    # first breakpoint is choosen
                 }
-                $F[3].=$type if $type;
-                $F[4] = $total->{$shear_key};
-                say join "\t", @F;
-                last;
+                else {
+                    $type = '*';    # there only one breakpoint to be choosen
+                }
             }
+
+            my $row = shift @{ $clusters->{$shear_key}->{$highest_number_of_reads} };
+            my @F = split "\t", $row;
+
+            $F[3] .= $type if $type;
+            $F[4] = $total->{$shear_key};
+            say join "\t", @F;
         }
     }
 
@@ -216,7 +228,6 @@ class MyApp::RefineBreakpoints {
         $self->log->warn("==> END $cmd <==");
     }
 }
-
    
 
 class Main {
