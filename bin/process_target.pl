@@ -53,7 +53,7 @@ class MyApp::ProcessTarget {
         cmd_type      => 'option',
         cmd_aliases   => [qw(m)],
         required      => 1,
-        defatule      => '3',
+        default      => '3',
         documentation => q[Mininum size to start the alignment],
     );
 
