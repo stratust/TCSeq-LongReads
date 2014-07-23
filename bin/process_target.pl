@@ -43,8 +43,20 @@ class MyApp::ProcessTarget {
         cmd_type      => 'option',
         cmd_aliases   => [qw(i)],
         required      => 1,
-        documentation => q[Very important option!],
+        documentation => q[Target alignment in bam BAM format!],
     );
+
+    has 'min_size' => (
+        is            => 'rw',
+        isa           => 'Int',
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        cmd_aliases   => [qw(m)],
+        required      => 1,
+        defatule      => '3',
+        documentation => q[Mininum size to start the alignment],
+    );
+
 
     method run {
         my $bam_entries = 0;
@@ -101,7 +113,7 @@ class MyApp::ProcessTarget {
                     $query_start = ( length( $align->query->dna ) - $align->query->end ) + 1;
                 }
                 
-                next if $query_start >= 36;
+                next if $query_start >= $self->min_size;
 
                 my %h = (
                     chr    => $target_names->[ $align->tid ],
