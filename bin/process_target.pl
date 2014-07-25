@@ -35,8 +35,7 @@ class MyApp::ProcessTarget {
     Progress::Any::Output->set('TermProgressBarColor');
 
 
-    command_short_description q[This command is awesome];
-    command_long_description q[This command is so awesome, yadda yadda yadda];
+    command_short_description q[Process a BAM file to generate cluster of reads];
 
     has_file 'input_file' => (
         traits        => ['AppOption'],
@@ -170,10 +169,11 @@ class MyApp::ProcessTarget {
                 my $h2 = $targets{$k}->[1];
                 if ( $h1->{chr} eq 'chr15' && $h2->{chr} eq 'chr15' ) {
                     $bait_chr++;
-                    #say "$h1->{qstart} | $h2->{qstart}";
+                    say "$h1->{qstart} | $h2->{qstart}";
                 }
                 elsif ( $h1->{chr} eq 'chr15' || $h2->{chr} eq 'chr15' ) {
                     $one_bait++;
+                    # Get this split
                 }
                 elsif ( $h1->{chr} eq $h2->{chr} ) {
                     $same_chr++;
