@@ -236,7 +236,7 @@ class TCSeq::LongReads {
     method _define_bait_target ( $qname, HashRef $s1,HashRef $s2) {
         #my $P1_trash = Bio::SeqIO->new( -file => '>P1_trash.fa', -format => 'fasta' );
         #my $P2_trash = Bio::SeqIO->new( -file => '>P2_trash.fa', -format => 'fasta' );
-
+        
         if ($s1->{is_bait}){
             if ($s2->{has_barcode}->{last_barcode_pos}){
                 #perfect
@@ -299,7 +299,9 @@ class TCSeq::LongReads {
         
         $bait->{trimmed_seq}   = $bait->{seq};
         $target->{trimmed_seq} = $target->{seq};
-
+       
+        # TRIMMING BAIT
+        # ------------------------------------------------------------------------------
         if ($bait->{has_barcode_complement}{sequence_before_barcode_complement}){
         
             my $bait_seq = $bait->{has_barcode_complement}{sequence_before_barcode_complement}; 
@@ -316,21 +318,29 @@ class TCSeq::LongReads {
             }
         } 
 
+        # TRIMMING TARGET
+        # ------------------------------------------------------------------------------
         # look for primer position in target ;
         my $primer = $bait->{is_bait}; # right or left
-        
+        #say "TARGET:";
+        #p $target;
+        #say "----------------------------------------------------------------------";
+        #say "BAIT:";
+        #p $bait->{$primer};
+ 
         if ( $target->{$primer} ) {
             my $match = amatch( $target->{$primer}->{after},
                 ['7%'], $bait->{$primer}->{after} );
             # trim sequence
             if ($match) {
                 $target->{trimmed_seq} =
-                  substr( $target->{seq}, 0, $target->{$primer}->{pos}->[0] );
+                  substr( $target->{seq}, 0, $target->{$primer}->{pos}->[1] );
             }
         }
 
-        # remove barcode
-        $target->{trimmed_seq} = substr( $target->{seq}, $target->{has_barcode}->{last_barcode_pos}->[1] );
+        # remove barcode (last step because barcode is always in the 5' end of
+        # the read
+        $target->{trimmed_seq} = substr( $target->{trimmed_seq}, $target->{has_barcode}->{last_barcode_pos}->[1] );
 
     } 
 
