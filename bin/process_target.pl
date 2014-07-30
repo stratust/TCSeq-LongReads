@@ -31,6 +31,7 @@ class MyApp::ProcessTarget {
     use Progress::Any;
     use Progress::Any::Output;
     use Number::Format qw(format_number);
+    use Digest::SHA qw(sha256_hex);
     
     Progress::Any::Output->set('TermProgressBarColor');
 
@@ -139,6 +140,7 @@ class MyApp::ProcessTarget {
         my $diff_chr=0;
 
         my %bed;
+        my %shear_read_names;
         $self->log->info('Filtering Hash');
         foreach my $k (keys %targets) {
             $info{scalar @{$targets{$k}}}++;
@@ -154,13 +156,15 @@ class MyApp::ProcessTarget {
                         $h->{strand}
                       );
                       $bed{$key}++;
+                      push @{ $shear_read_names{$key} }, $k;
                 }
                 else {
                     my $key = join "|",
                       ( $h->{chr}, $h->{end} - 1, $h->{end}, $primer ,$h->{strand} );
                     $bed{$key}++;
+                    push @{ $shear_read_names{$key} }, $k;
                 }
-
+                
                 my $bytes = $bamo->write1($h->{aln});
             }
             
@@ -191,6 +195,12 @@ class MyApp::ProcessTarget {
         open( my $out, '>', $outfile )
             || die "Cannot open/write file " . $outfile . "!";
 
+        my $indexfile = $self->input_file;    
+        $indexfile =~ s/\.bam/\.shears_index/g;
+        open( my $out_index, '>', $indexfile )
+            || die "Cannot open/write file " . $indexfile . "!";
+
+
         my %primer = (right => 1, left => 1);
         my %color = (right => '255,127,0', left => '77,175,74');
             
@@ -198,20 +208,34 @@ class MyApp::ProcessTarget {
         my $transloc = length(scalar keys %bed);
         foreach my $key (sort {$a cmp $b} keys %bed) {
             my @F = split /\|/, $key;
+            
+            my $sorted_read_names_string = join( ',', sort { $a cmp $b } @{ $shear_read_names{$key} } );
+            my $sha256_id = sha256_hex($sorted_read_names_string);
+
+            #my $shear_id = $F[3] . '_' . sprintf( "%0" . $transloc . "d", $primer{ $F[3] }++ );
+            
+            my $shear_id = $F[3] . '_' . $sha256_id;
+
             say $out join "\t",
               (
                 @F[ 0, 1, 2 ],
-                $F[3] . '_'
-                  . sprintf( "%0" . $transloc . "d", $primer{ $F[3] }++ ),
+                $shear_id,
                 $bed{$key},
                 $F[4],
                 @F[ 1, 2 ],
                 $color{ $F[3] }
               );
 
+            say $out_index $shear_id .
+                "\t" .
+                $bed{$key} .
+                "\t" . 
+                $sorted_read_names_string;
+
         } 
         close( $out );
-
+        close( $out_index );
+        
         p %info;
         say "bam_entries: $bam_entries";
         say "unmapped: $bam_unmapped";
