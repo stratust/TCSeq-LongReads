@@ -308,18 +308,10 @@ class MyApp::FixBed {
 }
 
 
-class MyApp::RetrieveReads {
-    extends 'MyApp'; # inherit log
-    use MooseX::App::Command;    # important
+role MyApp::Role::Index {
     use MooseX::FileAttribute;
     use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
-    use Bio::Moose::BedIO;
-    use Bio::SeqIO;
-    use Data::Printer;
-    use File::Basename;
     
-    command_short_description q[Retrieve reads given index files for shears and hotspots];
-
     has_file 'shear_index_file' => (
         traits        => ['AppOption'],
         cmd_type      => 'option',
@@ -346,6 +338,112 @@ class MyApp::RetrieveReads {
         must_exist    => 1,
         documentation => 'Hotspot BED file',
     );
+
+    method get_shear_index {
+        my %hash;
+
+        my $in = IO::Uncompress::AnyUncompress->new( $self->shear_index_file->stringify )
+            or die "Cannot open: $AnyUncompressError\n";
+
+        while ( my $row = <$in> ) {
+            chomp $row;
+            if ( $row =~ /^(left\S+|right\S+)\s+(\d+)\s+(\S+)$/ ) {
+                my ( $shear_id, $n_reads, $read_name_string ) = ( $1, $2, $3 );
+                my @read_names = split( ',', $read_name_string );
+                $hash{$shear_id} = \@read_names;
+            }
+            else {
+                say $row;
+                die $self->shear_index_file . " doesn't seem to be an shears index file!";
+            }
+        }
+
+        close($in);
+
+        return \%hash;
+    }
+
+    method get_hotspot_index {
+        my %hash;
+
+        my $in = IO::Uncompress::AnyUncompress->new( $self->hotspot_index_file->stringify )
+            or die "Cannot open: $AnyUncompressError\n";
+
+        while ( my $row = <$in> ) {
+            chomp $row;
+            if ( $row =~ /^(hotspot\d+)\s+(\S+)\s+(\d+)\s+(\S+)$/ ) {
+                my ( $hotspot_id, $sha256_id, $n_shears, $shear_id_string ) = ( $1, $2, $3, $4 );
+                my @shear_ids = split( ',', $shear_id_string );
+                $hash{$hotspot_id}{sha256} = $sha256_id;
+                $hash{$hotspot_id}{shears} = \@shear_ids;
+            }
+            else {
+                say $row;
+                die $self->hotspot_index_file . " doesn't seem to be a hotspot index file!";
+            }
+        }
+
+        close($in);
+
+        return \%hash;
+    }
+
+    method get_read_names_from_hotspots {
+        my %reads_ht;
+        #my %ht_reads;
+
+        $self->log->info("Indexing shears");
+        my $shear_index = $self->get_shear_index;
+
+        $self->log->info("Indexing hotspots");
+        my $ht_index = $self->get_hotspot_index;
+
+        my $in = Bio::Moose::BedIO->new(file => $self->hotspot_file->stringify);
+        
+        while (my $f = $in->next_feature) {
+            my $ht_id = $f->name;
+            if ($ht_index->{$ht_id}){
+                foreach my $shear_id (@{$ht_index->{$ht_id}->{shears}}) {
+                    #push(@{$ht_reads{$ht_id}{$shear_id}}, @{$shear_index->{$shear_id}});
+
+                    foreach my $read (@{$shear_index->{$shear_id}}){
+                        $reads_ht{$read} = { shear_id => $shear_id, hotspot_id => $ht_id };
+                    }
+                }
+            }
+        }
+
+        #return \%ht_reads;
+        return \%reads_ht;
+    }
+
+
+    method get_hotspots_shear_reads () {
+        my $reads_ht = $self->get_read_names_from_hotspots;
+        my %ht;
+        foreach my $read (sort {$a cmp $b} keys %{$reads_ht}) {
+            my $aux = $reads_ht->{$read};
+            $ht{$aux->{hotspot_id}}{$aux->{shear_id}}{$read} = 1;
+        }
+        return \%ht;
+    }
+}
+
+
+class MyApp::RetrieveReads {
+    extends 'MyApp'; # inherit log
+    with 'MyApp::Role::Index';
+    use MooseX::App::Command;    # important
+    use MooseX::FileAttribute;
+    use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
+    use Bio::Moose::BedIO;
+    use Bio::SeqIO;
+    use Data::Printer;
+    use File::Basename;
+    
+    command_short_description q[Retrieve reads given index files for shears and hotspots];
+
+
 
     has_file 'target_fasta_file' => (
         traits        => ['AppOption'],
@@ -424,83 +522,6 @@ class MyApp::RetrieveReads {
         return $outfile;
     }
 
-    method get_shear_index {
-        my %hash;
-
-        my $in = IO::Uncompress::AnyUncompress->new( $self->shear_index_file->stringify )
-            or die "Cannot open: $AnyUncompressError\n";
-
-        while ( my $row = <$in> ) {
-            chomp $row;
-            if ( $row =~ /^(left\S+|right\S+)\s+(\d+)\s+(\S+)$/ ) {
-                my ( $shear_id, $n_reads, $read_name_string ) = ( $1, $2, $3 );
-                my @read_names = split( ',', $read_name_string );
-                $hash{$shear_id} = \@read_names;
-            }
-            else {
-                say $row;
-                die $self->shear_index_file . " doesn't seem to be an shears index file!";
-            }
-        }
-
-        close($in);
-
-        return \%hash;
-    }
-
-    method get_hotspot_index {
-        my %hash;
-
-        my $in = IO::Uncompress::AnyUncompress->new( $self->hotspot_index_file->stringify )
-            or die "Cannot open: $AnyUncompressError\n";
-
-        while ( my $row = <$in> ) {
-            chomp $row;
-            if ( $row =~ /^(hotspot\d+)\s+(\S+)\s+(\d+)\s+(\S+)$/ ) {
-                my ( $hotspot_id, $sha256_id, $n_shears, $shear_id_string ) = ( $1, $2, $3, $4 );
-                my @shear_ids = split( ',', $shear_id_string );
-                $hash{$hotspot_id}{sha256} = $sha256_id;
-                $hash{$hotspot_id}{shears} = \@shear_ids;
-            }
-            else {
-                say $row;
-                die $self->hotspot_index_file . " doesn't seem to be an hotspot index file!";
-            }
-        }
-
-        close($in);
-
-        return \%hash;
-    }
-
-    method get_read_names_from_hotspots {
-        my %reads_ht;
-        #my %ht_reads;
-
-        $self->log->info("Indexing shears");
-        my $shear_index = $self->get_shear_index;
-
-        $self->log->info("Indexing hotspots");
-        my $ht_index = $self->get_hotspot_index;
-
-        my $in = Bio::Moose::BedIO->new(file => $self->hotspot_file->stringify);
-        
-        while (my $f = $in->next_feature) {
-            my $ht_id = $f->name;
-            if ($ht_index->{$ht_id}){
-                foreach my $shear_id (@{$ht_index->{$ht_id}->{shears}}) {
-                    #push(@{$ht_reads{$ht_id}{$shear_id}}, @{$shear_index->{$shear_id}});
-
-                    foreach my $read (@{$shear_index->{$shear_id}}){
-                        $reads_ht{$read} = { shear_id => $shear_id, hotspot_id => $ht_id };
-                    }
-                }
-            }
-        }
-
-        #return \%ht_reads;
-        return \%reads_ht;
-    }
 
     method run {
         my $reads = $self->get_read_names_from_hotspots;
@@ -691,8 +712,10 @@ class MyApp::FilterFragmentAlignments {
             
             if ( $align->unmapped ) {
                 $bam_unmapped++;
-                $self->log->error("Unmapped read found. You shouldn't have unmapped reads in this file. Check your bam file:". $qname);
-                die;
+                if ($self->sequence_type eq 'bait'){
+                    $self->log->error("Unmapped read found. You shouldn't have unmapped reads in this file. Check your bam file:". $qname);
+                    die;
+                }
             }
             else {
                my $strand = '+';
@@ -767,6 +790,141 @@ class MyApp::FilterFragmentAlignments {
         say "reads: $reads";
 
         $self->log->debug( 'bam file: ' . $self->input_file );
+    }
+}
+
+
+class MyApp::GetBreakPoint {
+    extends 'MyApp'; # inherit log
+    with 'MyApp::Role::Index';
+    use MooseX::App::Command;    # important
+    use MooseX::FileAttribute;
+    use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
+    use Bio::Moose::BedIO;
+    use Bio::SeqIO;
+    use Data::Printer;
+    use File::Basename;
+    use Progress::Any;
+    use Progress::Any::Output;
+    use Number::Format qw(format_number);
+
+    command_short_description q[];
+    
+    has_file 'target_bam_file' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        cmd_aliases   => 't',
+        required      => 0,
+        must_exist    => 1,
+        documentation => 'Target BAM file',
+    );
+
+    has_file 'bait_bam_file' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        cmd_aliases   => 'b',
+        required      => 0,
+        must_exist    => 1,
+        documentation => 'Bait BAM file',
+    );
+
+
+    method parse_bam_file($bam_file, Str $seq_type where {$_ =~ /^bait$|^target$/}, HashRef $hash) {
+        my $bam_entries = 0;
+        my $bam_unmapped = 0;
+
+        my $bame         = Bio::DB::Bam->open( $bam_file );
+        my $header       = $bame->header;
+        my $target_count = $header->n_targets;
+        my $target_names = $header->target_name;
+
+        $self->log->debug( 'bam file: ' . $bam_file );
+        
+        $self->log->info('Getting bam size');
+        my $cmd = "samtools view ". $bam_file ." | wc -l";
+        my $bam_size = qx/$cmd/;
+        
+        $self->log->info('Parsing bam and creating hash');
+        my $progress = Progress::Any->get_indicator(
+                     task => "Read_bam", target=> $bam_size
+        );
+        
+        my %targets;
+        # Optimize perl hash given size of hash keys
+        keys(%targets) = $bam_size;
+
+        while ( my $align = $bame->read1) {
+            my ( $qname, $query_start, $query_end, $query_dna );
+            
+            $bam_entries++;
+            
+            $progress->update( message => "Entry: " . format_number($bam_entries) );
+            
+            $qname = $align->qname;
+            $targets{$qname} = [] unless $targets{$qname};
+            
+            if ( $align->unmapped ) {
+                $bam_unmapped++;
+            }
+            else {
+               my $strand = '+';
+               $strand = '-' if $align->strand == -1;
+
+               my %h = (
+                    chr    => $target_names->[ $align->tid ],
+                    start  => $align->pos,
+                    end    => $align->calend,
+                    strand => $strand,
+                    qstart => $query_start,
+                    aln => $align
+                );
+                push @{ $targets{$qname} }, \%h;
+            }
+
+        }
+        
+        $progress->finish;
+
+        my %info;
+        my $reads = 0;
+
+        my %bed;
+        my %shear_read_names;
+        
+        $self->log->info('Filtering Hash');
+
+        foreach my $k ( keys %targets ) {
+            $info{ scalar @{ $targets{$k} } }++;
+            $reads++;
+            if ( scalar @{ $targets{$k} } == 1 ) {
+
+                # Get BAM alignment
+                my $align = $targets{$k}[0]->{aln};
+                my ( $read, $shear_id, $hotspot_id ) = split /\|/, $k;
+                my $aux = $hash->{$hotspot_id}{$shear_id}{$read};
+                if ($aux) {
+                    $hash->{$hotspot_id}{$shear_id}{$read} = { $seq_type => $align };
+                }
+                else {
+                    $self->log->error( "Could not find hotspot, shear or read name for:" . $k );
+                }
+            }
+            if ( scalar @{ $targets{$k} } > 1 ) {
+                $self->log->error(
+                    "Split in sequence shouldn't be reported. Check your bam file:" . $k );
+            }
+        }
+
+        p %info;
+        say "bam_entries: $bam_entries";
+        say "unmapped: $bam_unmapped";
+        say "reads: $reads";
+    }
+
+    method run () {
+         my $hash =  $self->get_hotspots_shear_reads;
+         $self->parse_bam_file($self->bait_bam_file,"bait",$hash);
+       
     }
 }
 
