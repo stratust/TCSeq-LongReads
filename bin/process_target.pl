@@ -713,8 +713,6 @@ class MyApp::FilterFragmentAlignments {
                     $bam_short_softclipped++;
                     next;
                }
-               say $qname;
-               say $clipped_seq;
 
                my %h = (
                     chr    => $target_names->[ $align->tid ],
