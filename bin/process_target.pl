@@ -911,6 +911,8 @@ class MyApp::GetBreakPoint {
                my $strand = '+';
                $strand = '-' if $align->strand == -1;
 
+               next if $align->qual < 20  || $align->length < 36;
+
                my $start = $align->pos;
                my $end = $align->calend;
                my %h = (
@@ -1123,7 +1125,7 @@ class MyApp::GetBreakPoint {
                     }
                 }
             }
-            push @features,$real_shear;
+            push @features,$real_shear unless $real_shear->blockCount == 1;
         }
        
 
