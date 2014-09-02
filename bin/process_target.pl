@@ -1047,23 +1047,23 @@ class MyApp::GetBreakPoint {
                     if ( $shear->{ $starts[0] } == $shear->{ $starts[1] } ) {
                         $mark = '#';
                         
-                        # make feature darker
+                        # make feature darkest
                         if ($shear_id =~ /left/ ){
-                            $real_shear->itemRgb('51,102,0');
+                            $real_shear->itemRgb('0,51,0');
                         }
                         if ($shear_id =~ /right/ ){
-                            $real_shear->itemRgb('153,76,0');
+                            $real_shear->itemRgb('102,51,0');
                         }
                        
                     }
                     else {
                         $mark = '*';
-                        # make feature darkest
+                        # make feature darker
                         if ($shear_id =~ /left/){
-                            $real_shear->itemRgb('0,51,0');
+                            $real_shear->itemRgb('51,102,0');
                         }
                         if ($shear_id =~ /right/ ){
-                            $real_shear->itemRgb('102,51,0');
+                            $real_shear->itemRgb('153,76,0');
                         }
 
                     }
