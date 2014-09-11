@@ -1280,6 +1280,15 @@ class MyApp::FilterBreakpoints {
 
         # Code Here
         my $hts = $self->get_hotspots_shear_reads();
+        
+        my %shear_hotspot;
+
+        foreach my $ht_id (keys %{$hts}) {
+            foreach my $shear_id (keys %{$hts->{$ht_id}}) {
+                $shear_hotspot{$shear_id} = $ht_id;
+            }
+        }
+        
         my %selected_breaks;
         open( my $in, '<', $self->input_file )
             || die "Cannot open/read file " . $self->input_file . "!";
@@ -1299,7 +1308,13 @@ class MyApp::FilterBreakpoints {
             my @F = split "\t", $row;
             my $breakpoint_id = $F[3];
             $breakpoint_id =~s/.*_(left|right.*)/$1/g;
-            say $row if $selected_breaks{$breakpoint_id};
+            if ($shear_hotspot{$breakpoint_id}){
+                $F[3] .= ":". $shear_hotspot{$breakpoint_id} ;
+            }
+            else{
+                die "Weird, I cant find the hotspot associated to this breakpoint:\n".$row."\n";
+            }
+           say join "\t", @F if $selected_breaks{$breakpoint_id};
             
         }
         
