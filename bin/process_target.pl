@@ -339,6 +339,13 @@ role MyApp::Role::Index {
         documentation => 'Hotspot BED file',
     );
 
+    has 'hotspot_file_track_line' => (
+        is            => 'rw',
+        isa           => 'Str',
+        documentation => 'Hold hotspot BED track_info',
+    );
+    
+
     method get_shear_index {
         my %hash;
 
@@ -399,7 +406,6 @@ role MyApp::Role::Index {
         my $ht_index = $self->get_hotspot_index;
 
         my $in = Bio::Moose::BedIO->new(file => $self->hotspot_file->stringify);
-        
         while (my $f = $in->next_feature) {
             my $ht_id = $f->name;
             if ($ht_index->{$ht_id}){
@@ -411,8 +417,9 @@ role MyApp::Role::Index {
                     }
                 }
             }
+            $self->hotspot_file_track_line($f->track_line);
         }
-
+ 
         #return \%ht_reads;
         return \%reads_ht;
     }
@@ -1324,6 +1331,82 @@ class MyApp::FilterBreakpoints {
         $self->log->warn("==> END $cmd <==");
     }
 }
+
+class MyApp::HotspotsDefinedByBreakpoints {
+    extends 'MyApp';    # inherit log
+    with 'MyApp::Role::Index';
+    use MooseX::App::Command;    # important
+    use MooseX::FileAttribute;
+    use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
+    use Data::Printer;
+    use List::Util qw(min max);
+
+    command_short_description q[Retrive breakpoints given a list of hostposts ids and shear index];
+
+    has_file 'breakpoints_file' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        cmd_aliases   => [qw(b)],
+        required      => 1,
+        documentation => q[Breakpoint bed file],
+    );
+
+    method run {
+        my $cmd;
+        $cmd = $1 if __PACKAGE__ =~ /\:\:(.*)$/;
+        $self->log->warn("==> Starting $cmd <==");
+
+        # Code Here
+        my $hts = $self->get_hotspots_shear_reads();
+        
+        my %shear_hotspot;
+
+        foreach my $ht_id (keys %{$hts}) {
+            foreach my $shear_id (keys %{$hts->{$ht_id}}) {
+                $shear_hotspot{$shear_id} = $ht_id;
+            }
+        }
+        
+        my $in = IO::Uncompress::AnyUncompress->new($self->breakpoints_file->stringify) 
+           or die "Cannot open: $AnyUncompressError\n";
+       
+        my %hotspots;
+        while ( my $row = <$in> ){
+            chomp $row;
+            next if $row =~ /^track/;
+            my @F = split "\t", $row;
+            my $breakpoint_id = $F[3];
+            $breakpoint_id =~s/.*_(left|right.*)/$1/g;
+            if ($shear_hotspot{$breakpoint_id}){
+                my $ht_id = $shear_hotspot{$breakpoint_id}; 
+                $F[3] .= ":". $ht_id ;
+
+                $hotspots{$ht_id}{chr} = $F[0];
+                push @{ $hotspots{$ht_id}{start} }, $F[1];
+                push @{ $hotspots{$ht_id}{end} },   $F[2];
+            }
+            else{
+                die "Weird, I cant find the hotspot associated to this breakpoint:\n".$row."\n";
+            }
+        }
+        
+        close( $in );
+        my $track_line = $self->hotspot_file_track_line;
+        $track_line =~ s/shears/breapoints/g;
+
+        say $track_line;
+        foreach my $ht_id (sort {$a cmp $b} keys %hotspots) {
+            my $ht = $hotspots{$ht_id};
+            my $chr = $ht->{chr};
+            my $start = min @{$ht->{start}};
+            my $score = scalar @{$ht->{start}};
+            my $end = max @{$ht->{end}};
+            say join "\t", ($chr, $start, $end, $ht_id, $score, '+', $start, $end, '102,0,51');
+        }
+        $self->log->warn("==> END $cmd <==");
+    }
+}
+
 
 
 class Main {
