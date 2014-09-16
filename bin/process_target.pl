@@ -1332,6 +1332,7 @@ class MyApp::FilterBreakpoints {
     }
 }
 
+
 class MyApp::HotspotsDefinedByBreakpoints {
     extends 'MyApp';    # inherit log
     with 'MyApp::Role::Index';
@@ -1348,7 +1349,16 @@ class MyApp::HotspotsDefinedByBreakpoints {
         cmd_type      => 'option',
         cmd_aliases   => [qw(b)],
         required      => 1,
+        must_exist    => 1,
         documentation => q[Breakpoint bed file],
+    );
+
+    has_file 'output_file' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        cmd_aliases   => [qw(o)],
+        required      => 1,
+        documentation => q[Output bed file],
     );
 
     method run {
@@ -1384,6 +1394,8 @@ class MyApp::HotspotsDefinedByBreakpoints {
                 $hotspots{$ht_id}{chr} = $F[0];
                 push @{ $hotspots{$ht_id}{start} }, $F[1];
                 push @{ $hotspots{$ht_id}{end} },   $F[2];
+                $hotspots{$ht_id}{left}++ if $F[3] =~ /left/;
+                $hotspots{$ht_id}{right}++ if $F[3] =~ /right/;
             }
             else{
                 die "Weird, I cant find the hotspot associated to this breakpoint:\n".$row."\n";
@@ -1393,16 +1405,31 @@ class MyApp::HotspotsDefinedByBreakpoints {
         close( $in );
         my $track_line = $self->hotspot_file_track_line;
         $track_line =~ s/shears/breapoints/g;
-
-        say $track_line;
+        open( my $out_bed, '>', $self->output_file.".bed" )
+            || die "Cannot open/write file " . $self->output_file . ".bed!";
+ 
+        open( my $out, '>', $self->output_file )
+            || die "Cannot open/write file " . $self->output_file . "!";
+       
+        say $out_bed $track_line;
         foreach my $ht_id (sort {$a cmp $b} keys %hotspots) {
+            my $cluster_id = $ht_id;
+            $cluster_id =~ s/hotspot/cluster/g;
             my $ht = $hotspots{$ht_id};
             my $chr = $ht->{chr};
             my $start = min @{$ht->{start}};
             my $score = scalar @{$ht->{start}};
             my $end = max @{$ht->{end}};
-            say join "\t", ($chr, $start, $end, $ht_id, $score, '+', $start, $end, '102,0,51');
+            say $out_bed join "\t", ($chr, $start, $end, $cluster_id, $score, '+', $start, $end, '102,0,51');
+            my ($left,$right) = ($ht->{left},$ht->{right});
+            $left |= 0;
+            $right |= 0;
+            say $out join "\t", ($chr, $start, $end, $cluster_id, ($end - $start), $score, $left,$right, $ht_id);
+
         }
+        close( $out_bed );
+        close( $out );
+ 
         $self->log->warn("==> END $cmd <==");
     }
 }
