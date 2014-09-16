@@ -417,7 +417,7 @@ role MyApp::Role::Index {
                     }
                 }
             }
-            $self->hotspot_file_track_line($f->track_line);
+            $self->hotspot_file_track_line($f->track_line) if $f->track_line;
         }
  
         #return \%ht_reads;
@@ -1381,6 +1381,7 @@ class MyApp::HotspotsDefinedByBreakpoints {
            or die "Cannot open: $AnyUncompressError\n";
        
         my %hotspots;
+
         while ( my $row = <$in> ){
             chomp $row;
             next if $row =~ /^track/;
