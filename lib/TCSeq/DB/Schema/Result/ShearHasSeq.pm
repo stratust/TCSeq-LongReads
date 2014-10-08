@@ -1,0 +1,99 @@
+use utf8;
+package TCSeq::DB::Schema::Result::ShearHasSeq;
+
+# Created by DBIx::Class::Schema::Loader
+# DO NOT MODIFY THE FIRST PART OF THIS FILE
+
+=head1 NAME
+
+TCSeq::DB::Schema::Result::ShearHasSeq
+
+=cut
+
+use strict;
+use warnings;
+
+use base 'DBIx::Class::Core';
+
+=head1 TABLE: C<shear_has_seq>
+
+=cut
+
+__PACKAGE__->table("shear_has_seq");
+
+=head1 ACCESSORS
+
+=head2 shear_id
+
+  data_type: 'integer'
+  is_foreign_key: 1
+  is_nullable: 0
+
+=head2 seq_id
+
+  data_type: 'integer'
+  is_foreign_key: 1
+  is_nullable: 0
+
+=cut
+
+__PACKAGE__->add_columns(
+  "shear_id",
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+  "seq_id",
+  { data_type => "integer", is_foreign_key => 1, is_nullable => 0 },
+);
+
+=head1 PRIMARY KEY
+
+=over 4
+
+=item * L</shear_id>
+
+=item * L</seq_id>
+
+=back
+
+=cut
+
+__PACKAGE__->set_primary_key("shear_id", "seq_id");
+
+=head1 RELATIONS
+
+=head2 seq
+
+Type: belongs_to
+
+Related object: L<TCSeq::DB::Schema::Result::Seq>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "seq",
+  "TCSeq::DB::Schema::Result::Seq",
+  { seq_id => "seq_id" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "CASCADE" },
+);
+
+=head2 shear
+
+Type: belongs_to
+
+Related object: L<TCSeq::DB::Schema::Result::Shear>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  "shear",
+  "TCSeq::DB::Schema::Result::Shear",
+  { shear_id => "shear_id" },
+  { is_deferrable => 1, on_delete => "CASCADE", on_update => "CASCADE" },
+);
+
+
+# Created by DBIx::Class::Schema::Loader v0.07042 @ 2014-10-06 18:38:41
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:V18ZuRLiXyaHCnTOuDXFeQ
+
+
+# You can replace this text with custom code or comments, and it will be preserved on regeneration
+1;
