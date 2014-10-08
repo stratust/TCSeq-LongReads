@@ -11,6 +11,7 @@ class TCSeq::LongReads {
     use String::Approx 'amatch';
     use Log::Any qw($log);
     use Data::Printer deparse => 1, sort_keys => 0;
+    use Try::Tiny;
 
     has 'barcode' => (
         is            => 'ro',
@@ -340,8 +341,14 @@ class TCSeq::LongReads {
 
         # remove barcode (last step because barcode is always in the 5' end of
         # the read
-        $target->{trimmed_seq} = substr( $target->{trimmed_seq}, $target->{has_barcode}->{last_barcode_pos}->[1] );
-
+        try {
+            $target->{trimmed_seq} = substr( $target->{trimmed_seq}, $target->{has_barcode}->{last_barcode_pos}->[1] ) or die;
+        }
+        catch {
+            $log->warn("target trimmed_seq:".$target->{trimmed_seq});
+            p $target->{has_barcode}->[1];
+        }
+       
     } 
 
 
