@@ -135,7 +135,7 @@ role MyApp::Role::Index {
 
 
 class MyApp::Populate is dirty {
-    use MooseX::App qw(Color);
+    use MooseX::App qw(Color Config);
     use TCSeq::DB::Schema;
     use Log::Any::App '$log',
         -screen => { pattern_style => 'script_long' },
@@ -171,12 +171,43 @@ class MyApp::Populate is dirty {
         required      => '1',
         default       => 'breakpointdb.db',
         documentation => q[SQLite filename used when SQLite backend is chosen],
-    );   
+    );
+
+    option 'dsn' => (
+          is            => 'rw',
+          isa           => 'Str',
+          required      => '1',
+          default => 'dbi:mysql:dbname=breakpoints;host=alpha.rockefeller.edu',
+          documentation => q[DSN information],
+    );
+
+    option 'db_user' => (
+          is            => 'rw',
+          isa           => 'Str',
+          required      => '0',
+          documentation => q[Databse Username if using mysql],
+    );
+    
+     option 'db_pass' => (
+          is            => 'rw',
+          isa           => 'Str',
+          required      => '0',
+          documentation => q[Databse password if using mysql],
+    );
+  
+    option 'library_name' => (
+          is            => 'rw',
+          isa           => 'Str',
+          cmd_aliases   => [qw(l)],
+          required      => '1',
+          documentation => q[Library name],
+    );
+ 
 
     method _build_schema {
         my $schema;
 
-        if ( $self->sqlite ) {
+        if ( $self->sqlite && !$self->db_user && !$self->db_pass) {
             $schema = TCSeq::DB::Schema->connect(
                 'dbi:SQLite:dbname='.$self->sqlite_file,
                 '',
@@ -190,9 +221,9 @@ class MyApp::Populate is dirty {
         }
         else {
             $schema = TCSeq::DB::Schema->connect( 
-                'dbi:mysql:dbname=breakpoints',
-                'root', 
-                '' 
+                $self->dsn,
+                $self->db_user, 
+                $self->db_pass, 
             );
         }
 
@@ -276,13 +307,6 @@ class MyApp::Populate::ShearIndexMemory {
         documentation => q[Shear BED file],
     );
 
-    option 'library_name' => (
-          is            => 'rw',
-          isa           => 'Str',
-          cmd_aliases   => [qw(l)],
-          required      => '1',
-          documentation => q[Library name],
-    );
 
     method _parse_shear_file {
         my $in =
@@ -412,14 +436,6 @@ class MyApp::Populate::HotspotIndexMemory {
         documentation => q[Hotspot BED file],
     );
 
-    option 'library_name' => (
-          is            => 'rw',
-          isa           => 'Str',
-          cmd_aliases   => [qw(l)],
-          required      => '1',
-          documentation => q[Library name],
-    );
-
     method _parse_hotspot_file {
         my $in =
           IO::Uncompress::AnyUncompress->new( $self->hotspot_file->stringify )
@@ -537,14 +553,6 @@ class MyApp::Populate::BreakpointIndexMemory {
         documentation => q[Hotspot BED file],
     );
 
-    option 'library_name' => (
-          is            => 'rw',
-          isa           => 'Str',
-          cmd_aliases   => [qw(l)],
-          required      => '1',
-          documentation => q[Library name],
-    );
-
     method _parse_breakpoint_file {
         my $in =
           IO::Uncompress::AnyUncompress->new( $self->breakpoint_file->stringify )
@@ -654,14 +662,6 @@ class MyApp::Populate::FastaIndexMemory {
         documentation => q[Input file],
     );
 
-    option 'library_name' => (
-          is            => 'rw',
-          isa           => 'Str',
-          cmd_aliases   => [qw(l)],
-          required      => '1',
-          documentation => q[Library name],
-    );
-
     method run {        
         my $cmd;
         $cmd = $1 if __PACKAGE__ =~ /\:\:(.*)$/;        
@@ -743,14 +743,6 @@ class MyApp::Populate::SelectHotspots {
     use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
     use Data::Printer;
     
-    option 'library_name' => (
-          is            => 'rw',
-          isa           => 'Str',
-          cmd_aliases   => [qw(l)],
-          required      => '1',
-          documentation => q[Library name],
-    );
-
     method run {
         # Code Here
         my $schema = $self->schema;
