@@ -74,6 +74,25 @@ class MyApp::Process_Primers {
         documentation => q[Name of the bait file],
     );
 
+    option 'barcode' => (
+        is            => 'rw',
+        isa           => 'Str',
+        required      => '1',
+        default       => 'GGCCGCT',
+        documentation => q[Barcode sequence (default for Philipp)],
+    );
+   
+    option 'linkers' => (
+        is       => 'rw',
+        isa      => 'ArrayRef',
+        required => '1',
+        default  => [
+            'GCAGCGGATAACAATTTCACACAGGACGTACTGTGC', 
+            'GTAAAGCTCAGTCAAGTACTGTGC'
+        ],
+
+        documentation => q[Linkers sequences (default for Philipp)],
+    );
    
 
 
@@ -84,11 +103,8 @@ class MyApp::Process_Primers {
         
         # Code Here
         my $tcseq = TCSeq::LongReads->new(
-            barcode => 'GGCCGCT',
-            linkers => [ 
-                'GCAGCGGATAACAATTTCACACAGGACGTACTGTGC', 
-                'GTAAAGCTCAGTCAAGTACTGTGC' 
-            ],
+            barcode => $self->barcode,
+            linkers => $self->linkers,
             output_dir => $self->output_dir,
             bait_file => $self->bait_filename,
             target_file => $self->target_filename
