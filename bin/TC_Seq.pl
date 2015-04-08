@@ -86,11 +86,10 @@ class MyApp::Process_Primers {
         is       => 'rw',
         isa      => 'ArrayRef',
         required => '1',
-        default  => [
+        default  => sub {  return [
             'GCAGCGGATAACAATTTCACACAGGACGTACTGTGC', 
             'GTAAAGCTCAGTCAAGTACTGTGC'
-        ],
-
+        ];},
         documentation => q[Linkers sequences (default for Philipp)],
     );
    
