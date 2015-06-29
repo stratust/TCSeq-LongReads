@@ -3,7 +3,8 @@ use Method::Signatures::Modifiers;
 use feature qw(say);
 
 class TCSeq::LongReads {
-    # ABSTRACT: Handle BAM files
+    # ABSTRACT: Handle BAM filesi
+    no warnings ('substr');
     use Carp;
     use Bio::Seq;
     use Bio::SeqIO;
@@ -242,7 +243,7 @@ class TCSeq::LongReads {
             if ($s2->{has_barcode}->{last_barcode_pos}){
                 #perfect
                 # check reverse barcode and trim sequences
-                $self->_trim_sequences($s1,$s2);
+                $self->_trim_sequences($s1,$s2,$qname);
 
                 $self->bait->write_seq(
                     $self->_build_bioseq_object( $qname, $s1, $s1->{is_bait} ) 
@@ -263,7 +264,7 @@ class TCSeq::LongReads {
              if ($s2->{is_bait}){
                 #perfect
                 # check reverse barcode and trim sequences
-                $self->_trim_sequences($s2,$s1);
+                $self->_trim_sequences($s2,$s1,$qname);
 
                 # Write into fasta file
                 $self->bait->write_seq( 
@@ -296,7 +297,7 @@ class TCSeq::LongReads {
 
 =cut 
 
-    method _trim_sequences ($bait,$target) {
+    method _trim_sequences ($bait,$target,$qname) {
         
         $bait->{trimmed_seq}   = $bait->{seq};
         $target->{trimmed_seq} = $target->{seq};
@@ -345,8 +346,13 @@ class TCSeq::LongReads {
             $target->{trimmed_seq} = substr( $target->{trimmed_seq}, $target->{has_barcode}->{last_barcode_pos}->[1] ) or die;
         }
         catch {
-            $log->warn("target trimmed_seq:".$target->{trimmed_seq});
-            p $target->{has_barcode}->[1];
+            if ( $target->{trimmed_seq} ) {
+                $log->error("target trimmed_seq:".$target->{trimmed_seq});
+            }
+            else {
+                $log->debug("\t$qname: target trimmed_seq: is not defined!\n\t\t Original Seq: $target->{seq}\n\n");
+            }
+            #p $target->{has_barcode};
         }
        
     } 
