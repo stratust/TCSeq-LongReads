@@ -203,6 +203,13 @@ class MyApp::Populate is dirty {
           documentation => q[Library name],
     );
  
+    option 'deploy' => (
+          is            => 'rw',
+          isa           => 'Bool',
+          required      => '0',
+          documentation => q[Deploy database before populate?],
+    );
+
 
     method _build_schema {
         my $schema;
@@ -226,6 +233,8 @@ class MyApp::Populate is dirty {
                 $self->db_pass, 
             );
         }
+
+        $schema->deploy({add_drop_table => 1}) if ( $self->deploy );
 
         return $schema;
     }
