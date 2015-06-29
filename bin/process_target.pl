@@ -57,6 +57,25 @@ class MyApp::ProcessTarget {
         documentation => q[Mininum size to start the alignment],
     );
 
+    has 'min_match_size' => (
+        is            => 'rw',
+        isa           => 'Int',
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        required      => 1,
+        default      => '36',
+        documentation => q[ Mininum match size of the alignment to be accepted ],
+    );
+
+    has 'min_qual' => (
+        is            => 'rw',
+        isa           => 'Int',
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        required      => 1,
+        default      => '20',
+        documentation => q[ Mininum quality of the alignment to be accepted ],
+    );
 
     method run {
         my $bam_entries = 0;
@@ -100,7 +119,7 @@ class MyApp::ProcessTarget {
                my $strand = '+';
                 $strand = '-' if $align->strand == -1;
 
-               next if $align->qual < 20  || $align->length < 36;
+               next if $align->qual < $self->min_qual  || $align->length < $self->min_match_size;
 
                 # Strand matters
                 # Postitive strand
@@ -826,6 +845,16 @@ class MyApp::GetBreakPoint {
         documentation => 'Target BAM file',
     );
 
+    has_file 'restriction_bam_file' => (
+        traits        => ['AppOption'],
+        cmd_type      => 'option',
+        cmd_aliases   => 'r',
+        required      => 1,
+        must_exist    => 1,
+        documentation => 'Bait restriction  BAM file',
+    );
+
+
     has_file 'bait_bam_file' => (
         traits        => ['AppOption'],
         cmd_type      => 'option',
@@ -877,7 +906,8 @@ class MyApp::GetBreakPoint {
         return $filename;
     }
 
-    method parse_bam_file($bam_file, Str $seq_type where {$_ =~ /^bait$|^target$/}, HashRef $hash) {
+
+    method parse_bam_file($bam_file, Str $seq_type where {$_ =~ /^bait$|^target$|^restriction$/}, HashRef $hash) {
         my $bam_entries = 0;
         my $bam_unmapped = 0;
 
@@ -948,30 +978,61 @@ class MyApp::GetBreakPoint {
         foreach my $k ( keys %targets ) {
             $info{ scalar @{ $targets{$k} } }++;
             $reads++;
-            if ( scalar @{ $targets{$k} } == 1 ) {
 
-                # Get BAM alignment
-                my $align = $targets{$k}[0]->{aln};
-                my $this = $targets{$k}[0];
-                #my $pos = $this->{chr}.':'.$this->{start}.'-'.$this->{end}."\t".$this->{strand}.":".$align->qual;
-                my $pos = $this;
+            # Annotating restriction
+            if ( $seq_type =~ /restriction/i ) {
+
+                # Get before and/or after restriction site info
+                my %info;
+                foreach my $aln ( @{ $targets{$k} } ) {
+                    $info{$aln->{chr}} = 1;
+                }
+
                 my ( $read, $shear_id, $hotspot_id ) = split /\|/, $k;
                 my $aux = $hash->{$hotspot_id}{$shear_id}{$read};
-                if ($aux) {
-                    if ($aux  == 1){
-                        $hash->{$hotspot_id}{$shear_id}{$read} = { $seq_type => $pos};
+                if ( $aux) {
+                    if ( $aux == 1 ) {
+                        $hash->{$hotspot_id}{$shear_id}{$read} = { $seq_type => \%info };
                     }
-                    else{
-                        $hash->{$hotspot_id}{$shear_id}{$read}{$seq_type} = $pos;
+                    else {
+                        $hash->{$hotspot_id}{$shear_id}{$read}{$seq_type} = \%info;
                     }
                 }
                 else {
-                    $self->log->error( "Could not find hotspot, shear or read name for:" . $k );
+                    $self->log->error( "Could not find hotspot, shear or read name for:" . $k . 'in restriction bam!' );
                 }
             }
-            if ( scalar @{ $targets{$k} } > 1 ) {
-                $self->log->error(
-                    "Split in sequence shouldn't be reported. Check your bam file:" . $k );
+            else {
+                # Annotating breakpoints
+                if ( scalar @{ $targets{$k} } == 1 ) {
+
+                    # Get BAM alignment
+                    my $align = $targets{$k}[0]->{aln};
+                    my $this  = $targets{$k}[0];
+
+                    #my $pos = $this->{chr}.':'.$this->{start}.'-'.$this->{end}."\t".$this->{strand}.":".$align->qual;
+                    my $pos = $this;
+                    my ( $read, $shear_id, $hotspot_id ) = split /\|/, $k;
+                    my $aux = $hash->{$hotspot_id}{$shear_id}{$read};
+                    if ($aux) {
+                        if ( $aux == 1 ) {
+                            $hash->{$hotspot_id}{$shear_id}{$read} =
+                              { $seq_type => $pos };
+                        }
+                        else {
+                            $hash->{$hotspot_id}{$shear_id}{$read}{$seq_type} =
+                              $pos;
+                        }
+                    }
+                    else {
+                        $self->log->error(
+                            "Could not find hotspot, shear or read name for:"
+                              . $k );
+                    }
+                }
+                elsif ( scalar @{ $targets{$k} } > 1 ) {
+                    $self->log->error( "Split in sequence shouldn't be reported. Check your bam file:" . $k );
+                }
             }
         }
 
@@ -983,10 +1044,11 @@ class MyApp::GetBreakPoint {
         return $hash;
     }
 
-    method run () {
+    method run  {
         my $hash = $self->get_hotspots_shear_reads;
         $hash = $self->parse_bam_file( $self->bait_bam_file,   "bait",   $hash );
         $hash = $self->parse_bam_file( $self->target_bam_file, "target", $hash );
+        $hash = $self->parse_bam_file( $self->restriction_bam_file, "restriction", $hash );
 
         #p $hash;
         #exit;
@@ -1011,12 +1073,33 @@ class MyApp::GetBreakPoint {
                     $total_read_count++;    # count reads
                     my $read = $shear->{$read_name};
 
-                    unless ( $read == 1 ) {
+                    if ( ref $read ) {
                         $breakpoint_read++;
 
                         # Check if there is bait information
                         my $bait   = $read->{bait};
                         my $target = $read->{target};
+                        
+                        # Chech if there is restriction information
+                        my $restriction = $read->{restriction};
+
+                        if ( ref $restriction ){
+                            if ($restriction->{left} && $restriction->{right}){
+                                $self->log->warn("Crossing breakpoint ". $read_name);
+                                next;
+                            }
+                            elsif ($restriction->{left} && $read_name =~ /right/i) {
+                                $self->log->warn("Wrong primer ". $read_name);
+                                next;
+                            }
+                            elsif ($restriction->{right} && $read_name =~ /left/i) {
+                                $self->log->warn("Wrong primer ". $read_name);
+                                next;
+                            }
+ 
+                        }
+
+                        next unless (ref $bait || ref $target );
 
                         # check breakpoint for bait and target
                         my $position = $self->define_breakpoint(shear_id => $shear_id, bait => $bait, target => $target );
@@ -1149,8 +1232,6 @@ class MyApp::GetBreakPoint {
         close( $out );
  
     }
-
-
 
     method _is_close_to_shear_location (Str $shear_id, HashRef $position) {
          my $shear = $self->shears->{$shear_id};
@@ -1399,13 +1480,13 @@ class MyApp::HotspotsDefinedByBreakpoints {
                 $hotspots{$ht_id}{right}++ if $F[3] =~ /right/;
             }
             else{
-                die "Weird, I cant find the hotspot associated to this breakpoint:\n".$row."\n";
+                $self->log->warn("Weird, I cant find the hotspot associated to this breakpoint:\n".$row."\n");
             }
         }
         
         close( $in );
         my $track_line = $self->hotspot_file_track_line;
-        $track_line =~ s/shears/breapoints/g;
+        $track_line =~ s/shears/breakpoints/g;
         open( my $out_bed, '>', $self->output_file.".bed" )
             || die "Cannot open/write file " . $self->output_file . ".bed!";
  
@@ -1426,7 +1507,6 @@ class MyApp::HotspotsDefinedByBreakpoints {
             $left |= 0;
             $right |= 0;
             say $out join "\t", ($chr, $start, $end, $cluster_id, ($end - $start), $score, $left,$right, $ht_id);
-
         }
         close( $out_bed );
         close( $out );
