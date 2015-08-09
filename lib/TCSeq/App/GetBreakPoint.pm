@@ -15,6 +15,7 @@ class TCSeq::App::GetBreakPoint {
     use Progress::Any::Output;
     use Number::Format qw(format_number);
     use Data::Printer;
+    use Bio::DB::Sam;
 
     command_short_description q[];
     
