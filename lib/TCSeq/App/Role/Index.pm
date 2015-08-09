@@ -1,8 +1,10 @@
 use feature qw(say);
+use Moose;
 use MooseX::Declare;
 use Method::Signatures::Modifiers;
 
 role TCSeq::App::Role::Index {
+    use Bio::Moose::BedIO;
     use MooseX::FileAttribute;
     use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
     
