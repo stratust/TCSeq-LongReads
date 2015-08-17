@@ -125,6 +125,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 insertion_defined_has_seqs
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::InsertionDefinedHasSeq>
+
+=cut
+
+__PACKAGE__->has_many(
+  "insertion_defined_has_seqs",
+  "TCSeq::DB::Schema::Result::InsertionDefinedHasSeq",
+  { "foreign.seq_id" => "self.seq_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 library
 
 Type: belongs_to
@@ -138,6 +153,36 @@ __PACKAGE__->belongs_to(
   "TCSeq::DB::Schema::Result::Library",
   { library_id => "library_id" },
   { is_deferrable => 1, on_delete => "CASCADE", on_update => "CASCADE" },
+);
+
+=head2 microhomology_bait_alignments
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::MicrohomologyBaitAlignment>
+
+=cut
+
+__PACKAGE__->has_many(
+  "microhomology_bait_alignments",
+  "TCSeq::DB::Schema::Result::MicrohomologyBaitAlignment",
+  { "foreign.seq_id" => "self.seq_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 microhomology_defined_has_seqs
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::MicrohomologyDefinedHasSeq>
+
+=cut
+
+__PACKAGE__->has_many(
+  "microhomology_defined_has_seqs",
+  "TCSeq::DB::Schema::Result::MicrohomologyDefinedHasSeq",
+  { "foreign.seq_id" => "self.seq_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
 );
 
 =head2 shear_has_seqs
@@ -195,6 +240,34 @@ Composing rels: L</breakpoint_has_seqs> -> breakpoint
 
 __PACKAGE__->many_to_many("breakpoints", "breakpoint_has_seqs", "breakpoint");
 
+=head2 insertions_defined
+
+Type: many_to_many
+
+Composing rels: L</insertion_defined_has_seqs> -> insertion_defined
+
+=cut
+
+__PACKAGE__->many_to_many(
+  "insertions_defined",
+  "insertion_defined_has_seqs",
+  "insertion_defined",
+);
+
+=head2 microhomologies_defined
+
+Type: many_to_many
+
+Composing rels: L</microhomology_defined_has_seqs> -> microhomology_defined
+
+=cut
+
+__PACKAGE__->many_to_many(
+  "microhomologies_defined",
+  "microhomology_defined_has_seqs",
+  "microhomology_defined",
+);
+
 =head2 shears
 
 Type: many_to_many
@@ -205,6 +278,9 @@ Composing rels: L</shear_has_seqs> -> shear
 
 __PACKAGE__->many_to_many("shears", "shear_has_seqs", "shear");
 
+
+# Created by DBIx::Class::Schema::Loader v0.07040 @ 2014-10-17 17:46:19
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:Ubng+rYHa4+gX9s0q92axQ
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

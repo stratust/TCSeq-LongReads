@@ -100,27 +100,29 @@ __PACKAGE__->add_columns(
 
 =over 4
 
+=item * L</breakpoint_name>
+
+=item * L</library_id>
+
+=back
+
+=cut
+
+__PACKAGE__->set_primary_key("breakpoint_name", "library_id");
+
+=head1 UNIQUE CONSTRAINTS
+
+=head2 C<breakpoint_id_UNIQUE>
+
+=over 4
+
 =item * L</breakpoint_id>
 
 =back
 
 =cut
 
-__PACKAGE__->set_primary_key("breakpoint_id");
-
-=head1 UNIQUE CONSTRAINTS
-
-=head2 C<breakpoint_name_UNIQUE>
-
-=over 4
-
-=item * L</breakpoint_name>
-
-=back
-
-=cut
-
-__PACKAGE__->add_unique_constraint("breakpoint_name_UNIQUE", ["breakpoint_name"]);
+__PACKAGE__->add_unique_constraint("breakpoint_id_UNIQUE", ["breakpoint_id"]);
 
 =head1 RELATIONS
 
@@ -190,8 +192,8 @@ Composing rels: L</shear_has_breakpoints> -> shear
 __PACKAGE__->many_to_many("shears", "shear_has_breakpoints", "shear");
 
 
-# Created by DBIx::Class::Schema::Loader v0.07042 @ 2014-10-06 18:38:41
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:w/hf3lpxLi9ptZZcyOp02w
+# Created by DBIx::Class::Schema::Loader v0.07040 @ 2014-10-17 17:46:19
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:7w61rBDKI3QcJJmME2hF6g
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

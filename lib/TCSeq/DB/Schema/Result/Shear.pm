@@ -125,6 +125,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 insertions_defined
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::InsertionDefined>
+
+=cut
+
+__PACKAGE__->has_many(
+  "insertions_defined",
+  "TCSeq::DB::Schema::Result::InsertionDefined",
+  { "foreign.shear_id" => "self.shear_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 library
 
 Type: belongs_to
@@ -138,6 +153,21 @@ __PACKAGE__->belongs_to(
   "TCSeq::DB::Schema::Result::Library",
   { library_id => "library_id" },
   { is_deferrable => 1, on_delete => "CASCADE", on_update => "CASCADE" },
+);
+
+=head2 microhomologies_defined
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::MicrohomologyDefined>
+
+=cut
+
+__PACKAGE__->has_many(
+  "microhomologies_defined",
+  "TCSeq::DB::Schema::Result::MicrohomologyDefined",
+  { "foreign.shear_id" => "self.shear_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
 );
 
 =head2 shear_has_breakpoints
@@ -201,8 +231,8 @@ Composing rels: L</shear_has_seqs> -> seq
 __PACKAGE__->many_to_many("seqs", "shear_has_seqs", "seq");
 
 
-# Created by DBIx::Class::Schema::Loader v0.07042 @ 2014-10-06 18:38:41
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:nBiNQnkGPQ7wYsjxqIqgBg
+# Created by DBIx::Class::Schema::Loader v0.07040 @ 2014-10-17 17:46:19
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:1nJ6TohD4XJq+mw2mMGmNw
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration

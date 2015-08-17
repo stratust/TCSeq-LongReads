@@ -118,6 +118,21 @@ __PACKAGE__->has_many(
   { cascade_copy => 0, cascade_delete => 0 },
 );
 
+=head2 insertions_defined
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::InsertionDefined>
+
+=cut
+
+__PACKAGE__->has_many(
+  "insertions_defined",
+  "TCSeq::DB::Schema::Result::InsertionDefined",
+  { "foreign.hotspot_id" => "self.hotspot_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 library
 
 Type: belongs_to
@@ -133,6 +148,36 @@ __PACKAGE__->belongs_to(
   { is_deferrable => 1, on_delete => "CASCADE", on_update => "CASCADE" },
 );
 
+=head2 microhomologies_defined
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::MicrohomologyDefined>
+
+=cut
+
+__PACKAGE__->has_many(
+  "microhomologies_defined",
+  "TCSeq::DB::Schema::Result::MicrohomologyDefined",
+  { "foreign.hotspot_id" => "self.hotspot_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
+=head2 microhomology_bait_alignments
+
+Type: has_many
+
+Related object: L<TCSeq::DB::Schema::Result::MicrohomologyBaitAlignment>
+
+=cut
+
+__PACKAGE__->has_many(
+  "microhomology_bait_alignments",
+  "TCSeq::DB::Schema::Result::MicrohomologyBaitAlignment",
+  { "foreign.hotspot_id" => "self.hotspot_id" },
+  { cascade_copy => 0, cascade_delete => 0 },
+);
+
 =head2 shears
 
 Type: many_to_many
@@ -144,8 +189,8 @@ Composing rels: L</hotspot_has_shears> -> shear
 __PACKAGE__->many_to_many("shears", "hotspot_has_shears", "shear");
 
 
-# Created by DBIx::Class::Schema::Loader v0.07042 @ 2014-10-06 18:38:41
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:6V7wa0nrkWkDylTGendLhg
+# Created by DBIx::Class::Schema::Loader v0.07040 @ 2014-10-17 17:46:19
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:DYwTJbx7NpGaarwEw4R5Rg
 
 
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
