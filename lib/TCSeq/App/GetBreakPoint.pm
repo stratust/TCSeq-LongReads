@@ -131,8 +131,13 @@ class TCSeq::App::GetBreakPoint {
             else {
                my $strand = '+';
                $strand = '-' if $align->strand == -1;
-
-               next if $align->qual < 20  || $align->length < 36;
+                
+               unless ($seq_type =~ /restriction/i){
+                    next if $align->qual < 20  || $align->length < 36;
+               }
+               else{
+                    next if $align->qual < 20;
+               }
 
                my $start = $align->pos;
                my $end = $align->calend;
@@ -257,7 +262,7 @@ class TCSeq::App::GetBreakPoint {
                 foreach my $read_name ( sort { $a cmp $b } keys %{$shear} ) {
                     $total_read_count++;    # count reads
                     my $read = $shear->{$read_name};
-
+                    
                     if ( ref $read ) {
                         $breakpoint_read++;
 
@@ -272,7 +277,7 @@ class TCSeq::App::GetBreakPoint {
                             if ($restriction->{left} && $restriction->{right}){
                                 $self->log->warn("Crossing breakpoint ". $read_name);
                                 next;
-                            }
+                           }
                             elsif ($restriction->{left} && $read_name =~ /right/i) {
                                 $self->log->warn("Wrong primer ". $read_name);
                                 next;
