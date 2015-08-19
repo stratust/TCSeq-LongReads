@@ -247,7 +247,9 @@ class TCSeq::App::GetBreakPoint {
         my %breakpoint_positions;
 
         my ( $total_shear_count, $total_hotspot_count, $total_read_count ) = 0 x 3;
-
+        
+        my %debug_break_restriction;
+        my %debug_break;
         foreach my $hotspot_id ( sort { $a cmp $b } keys %{$hash} ) {
             my $ht              = $hash->{$hotspot_id};
             my $breakpoint_read = 0;
@@ -276,6 +278,8 @@ class TCSeq::App::GetBreakPoint {
                         if ( ref $restriction ){
                             if ($restriction->{left} && $restriction->{right}){
                                 $self->log->warn("Crossing breakpoint ". $read_name);
+                                $debug_break_restriction{$hotspot_id}{$shear_id}{count}++;
+                                push ( @{ $debug_break_restriction{$hotspot_id}{$shear_id}{read_name} }, $read_name );
                                 next;
                            }
                             elsif ($restriction->{left} && $read_name =~ /right/i) {
@@ -296,6 +300,9 @@ class TCSeq::App::GetBreakPoint {
                         if ($position ){
                             $starts{$position->{start}}++;
                             push @{$breakpoint_positions{$shear_id}{$position->{start}} },$position;
+                            $debug_break{$hotspot_id}{$shear_id}{count}++;
+                            push ( @{ $debug_break{$hotspot_id}{$shear_id}{read_name} }, $read_name );
+                            push ( @{ $debug_break{$hotspot_id}{$shear_id}{starts}{$position->{start}} }, $read_name );
                         }
                     }
                     else {
@@ -306,6 +313,11 @@ class TCSeq::App::GetBreakPoint {
             }
             $self->log->info("No reads for this hotspot: ". $hotspot_id) unless $breakpoint_read;
         }
+
+        
+
+        # keep track of the used starts
+        my %used_starts;
 
         # Create BED file
         my @features;
@@ -359,6 +371,10 @@ class TCSeq::App::GetBreakPoint {
                 else{
                     $real_shear->name("(".$shear->{$starts[0]}.'/'.$total_reads_bp."|".$real_shear->score.")_".$real_shear->name);
                 }
+                
+                # track used starts per shear
+                $used_starts{$shear_id}{start} = $starts[0];
+                $used_starts{$shear_id}{breakpoint_id} = $real_shear->name;
 
                 if ( $real_shear->strand eq '+' ) {
                     if ($real_shear->chromStart < $starts[0]){
@@ -408,6 +424,39 @@ class TCSeq::App::GetBreakPoint {
             push @features,$real_shear unless $real_shear->blockCount == 1;
         }
        
+        # create log and index file
+        my @log;
+        my @index;
+        foreach my $hotspot_id ( sort { $a cmp $b } keys %{$hash} ) {
+            my $ht = $hash->{$hotspot_id};
+            #say $hotspot_id;
+            foreach my $shear_id ( sort { $a cmp $b } keys %{$ht} ) {
+                my @row;
+                push @row, $hotspot_id;
+                push @row,$shear_id;
+                push @row, $debug_break{$hotspot_id}{$shear_id}{count} || '0';
+                push @row, $debug_break_restriction{$hotspot_id}{$shear_id}{count} || '0';
+                push @log, join "\t", @row;
+                
+                # check if shear was used
+                my $start = $used_starts{$shear_id}{start};
+                if ( $start ){
+                
+                    my $breakpoint_id = $used_starts{$shear_id}{breakpoint_id};
+                    my @reads = @{ $debug_break{$hotspot_id}{$shear_id}{starts}{ $start }  };
+                    foreach my $read_name ( @reads ) {
+                        my @index_row;
+                        push @index_row, $hotspot_id;
+                        push @index_row, $shear_id;
+                        push @index_row, $breakpoint_id;
+                        push @index_row, $read_name;
+                        push @index, join "\t", @index_row;    
+                    }
+
+                }
+            }
+        }
+
 
         my $track_line = $features[0]->track_line;
         $track_line =~ s/shears/breakpoints/g;
@@ -420,6 +469,21 @@ class TCSeq::App::GetBreakPoint {
             print $out $feat->row;
         }
         close( $out );
+ 
+        open( my $out_log, '>', $self->output_file . '.log' )
+            || die "Cannot open/write file " . $self->output_file . ".log!";
+        say $out_log join "\t", qw/hotspot_id shear_id n_reads_used n_reads_cross_iscei/; 
+        foreach my $r (@log) {            
+           say $out_log $r;
+        }
+        close( $out_log );
+ 
+        open( my $out_index, '>', $self->output_file . '.breakpoint_read_index' )
+            || die "Cannot open/write file " . $self->output_file . ".breakpoint_read_index!";
+        foreach my $r (@index) {            
+           say $out_index $r;
+        }
+        close( $out_index );
  
     }
 
